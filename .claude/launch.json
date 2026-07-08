@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "localhost:8080", "-t", "public"],
+      "port": 8080
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--prefix", "frontend"],
+      "port": 4200
+    },
+    {
+      "name": "backend-preview",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "localhost:8089", "-t", "public", "bin/dev-router.php"],
+      "port": 8089
+    }
+  ]
+}

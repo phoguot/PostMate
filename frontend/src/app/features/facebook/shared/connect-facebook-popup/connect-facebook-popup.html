@@ -1,0 +1,91 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" (click)="onCancel()">
+  <div class="flex max-h-[90vh] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl" (click)="$event.stopPropagation()">
+    <header class="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
+      <button type="button" class="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900" (click)="onCancel()">
+        <app-icon [icon]="backIcon" [size]="16" />
+        Quay lại
+      </button>
+      <h2 class="text-sm font-semibold text-gray-900">Kết nối với Facebook</h2>
+      <button type="button" class="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100" (click)="onCancel()">
+        <app-icon [icon]="closeIcon" [size]="18" />
+      </button>
+    </header>
+
+    <div class="flex-1 overflow-y-auto px-6 py-6">
+      <div class="mb-5 flex justify-center">
+        <div class="flex h-20 w-20 items-center justify-center rounded-full bg-[#1877F2] text-3xl font-bold text-white">f</div>
+      </div>
+
+      <h3 class="text-center text-lg font-semibold text-gray-900">Kết nối tài khoản Facebook với PostMate</h3>
+      <p class="mx-auto mt-1.5 max-w-sm text-center text-sm text-gray-500">
+        Kết nối để đăng bài, quản lý trang và theo dõi hiệu suất trực tiếp từ PostMate một cách dễ dàng.
+      </p>
+
+      <div class="mt-5 flex items-start gap-3 rounded-xl border border-[var(--color-status-info-bg)] bg-[var(--color-status-info-bg)] p-3">
+        <app-icon [icon]="shieldIcon" [size]="18" class="mt-0.5 shrink-0 text-[var(--color-brand)]" />
+        <p class="text-xs text-gray-600">
+          Chúng tôi cam kết bảo mật thông tin của bạn.
+          <br />
+          PostMate chỉ truy cập những thông tin bạn cho phép.
+        </p>
+      </div>
+
+      <div class="mt-4 rounded-xl border border-gray-100">
+        <p class="border-b border-gray-100 px-4 py-3 text-sm font-medium text-gray-900">PostMate sẽ có quyền:</p>
+        @for (perm of permissions; track perm.key) {
+          <div class="border-b border-gray-50 last:border-b-0">
+            <button type="button" class="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50" (click)="toggleExpanded(perm.key)">
+              <div class="flex items-start gap-3">
+                <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-status-info-bg)] text-[var(--color-brand)]">
+                  <app-icon [icon]="perm.icon" [size]="15" />
+                </span>
+                <span>
+                  <span class="block text-sm font-medium text-gray-900">{{ perm.title }}</span>
+                  <span class="mt-0.5 block text-xs text-gray-400">{{ perm.description }}</span>
+                </span>
+              </div>
+              <app-icon [icon]="chevronIcon" [size]="16" class="mt-1 shrink-0 text-gray-400 transition-transform" [class.rotate-180]="expandedKey() === perm.key" />
+            </button>
+            @if (expandedKey() === perm.key) {
+              <div class="flex flex-wrap gap-1.5 px-4 pb-3 pl-[52px]">
+                @for (scope of perm.scopes; track scope) {
+                  <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-mono text-gray-500">{{ scope }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="mt-4 flex items-start gap-2 text-xs text-gray-400">
+        <app-icon [icon]="lockIcon" [size]="14" class="mt-0.5 shrink-0" />
+        <p>
+          Bạn có thể gỡ kết nối bất kỳ lúc nào trong mục Cài đặt &gt; Facebook.
+          <br />
+          Tìm hiểu thêm trong <span class="text-[var(--color-brand)]">Chính sách quyền riêng tư</span> của chúng tôi.
+        </p>
+      </div>
+    </div>
+
+    <div class="shrink-0 border-t border-gray-100 px-6 py-4">
+      <button
+        type="button"
+        class="flex w-full items-center justify-center gap-2 rounded-lg bg-[#1877F2] px-4 py-2.5 text-sm font-medium text-white hover:opacity-95 disabled:opacity-60"
+        [disabled]="connecting()"
+        (click)="onContinue()"
+      >
+        <span class="flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-[#1877F2]">f</span>
+        {{ connecting() ? 'Đang kết nối...' : 'Tiếp tục với Facebook' }}
+      </button>
+      <button
+        type="button"
+        class="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+        [disabled]="connecting()"
+        (click)="onCancel()"
+      >
+        Hủy
+      </button>
+      <p class="mt-3 text-center text-xs text-gray-400">Bằng việc tiếp tục, bạn đồng ý với việc PostMate nhận các quyền truy cập ở trên.</p>
+    </div>
+  </div>
+</div>

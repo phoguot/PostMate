@@ -1,0 +1,16 @@
+RewriteEngine On
+
+# 1. API requests -> PHP
+RewriteCond %{REQUEST_URI} ^/api/ [NC]
+RewriteRule ^ index.php [L]
+
+# 2. Static files that actually exist -> serve directly
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# 3. All SPA routes -> Angular index.html
+RewriteCond %{DOCUMENT_ROOT}/index.html -f
+RewriteRule ^ index.html [L]
+
+# 4. Fallback -> PHP
+RewriteRule ^ index.php [L]

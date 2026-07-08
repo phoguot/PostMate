@@ -1,0 +1,104 @@
+<div class="flex flex-col gap-4">
+  <div class="rounded-xl border border-gray-200 bg-white p-4">
+    <h2 class="mb-3 text-sm font-semibold text-gray-900">Thông tin tài khoản</h2>
+    <div class="flex items-center gap-3">
+      <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-200 text-lg font-semibold text-gray-600">
+        {{ (auth.currentUser()?.fullName ?? auth.currentUser()?.username ?? '?').charAt(0).toUpperCase() }}
+      </div>
+      <div>
+        <p class="font-medium text-gray-900">{{ auth.currentUser()?.fullName ?? auth.currentUser()?.username }}</p>
+        <p class="text-sm text-gray-500">{{ auth.currentUser()?.email }}</p>
+        <span class="mt-1 inline-block rounded-full bg-[var(--color-status-info-bg)] px-2 py-0.5 text-xs text-[var(--color-brand)]">{{ auth.currentUser()?.role }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+      <h2 class="mb-3 text-sm font-semibold text-gray-900">Ngôn ngữ & Múi giờ</h2>
+      <label class="mb-1 block text-xs font-medium text-gray-500">Ngôn ngữ</label>
+      <select class="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="language()" (ngModelChange)="language.set($event)">
+        <option value="vi">Tiếng Việt</option>
+        <option value="en">English</option>
+      </select>
+      <label class="mb-1 block text-xs font-medium text-gray-500">Múi giờ</label>
+      <select class="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="timezone()" (ngModelChange)="timezone.set($event)">
+        <option value="Asia/Ho_Chi_Minh">(GMT+07:00) Asia/Ho Chi Minh</option>
+        <option value="UTC">(GMT+00:00) UTC</option>
+      </select>
+      <button type="button" class="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-sm font-medium text-white" (click)="saveLocale()">
+        Lưu thay đổi
+      </button>
+    </div>
+
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+      <h2 class="mb-3 text-sm font-semibold text-gray-900">Cài đặt mặc định khi tạo bài viết</h2>
+      <label class="mb-1 block text-xs font-medium text-gray-500">Fanpage mặc định</label>
+      <select class="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="defaultFanpageId()" (ngModelChange)="defaultFanpageId.set($event)">
+        <option [ngValue]="''">-- Không chọn --</option>
+        @for (fp of fanpages(); track fp.id) {
+          <option [ngValue]="fp.id">{{ fp.name }}</option>
+        }
+      </select>
+      <label class="mb-1 block text-xs font-medium text-gray-500">Loại nội dung mặc định</label>
+      <select class="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="defaultContentType()" (ngModelChange)="defaultContentType.set($event)">
+        <option [ngValue]="''">-- Không chọn --</option>
+        @for (opt of contentTypeOptions; track opt.value) {
+          <option [ngValue]="opt.value">{{ opt.label }}</option>
+        }
+      </select>
+      <label class="mb-1 block text-xs font-medium text-gray-500">Trạng thái mặc định</label>
+      <select class="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="defaultStatus()" (ngModelChange)="defaultStatus.set($event)">
+        <option [ngValue]="''">-- Không chọn --</option>
+        @for (opt of statusOptions; track opt.value) {
+          <option [ngValue]="opt.value">{{ opt.label }}</option>
+        }
+      </select>
+      <label class="mb-1 block text-xs font-medium text-gray-500">Thời gian đăng mặc định</label>
+      <input type="time" class="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="defaultPostTime()" (ngModelChange)="defaultPostTime.set($event)" />
+      <button type="button" class="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-sm font-medium text-white" (click)="saveDefaults()">
+        Lưu thay đổi
+      </button>
+    </div>
+  </div>
+
+  @if (settings(); as s) {
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+      <h2 class="mb-3 text-sm font-semibold text-gray-900">Tùy chọn hệ thống</h2>
+      <div class="flex flex-col divide-y divide-gray-100">
+        <label class="flex items-center justify-between py-3">
+          <span class="text-sm text-gray-700">Tự động rút gọn link</span>
+          <input type="checkbox" [checked]="s.autoShortenLink" (change)="toggleOption('autoShortenLink', s.autoShortenLink)" />
+        </label>
+        <label class="flex items-center justify-between py-3">
+          <span class="text-sm text-gray-700">Tự động lưu bản nháp</span>
+          <input type="checkbox" [checked]="s.autoSaveDraft" (change)="toggleOption('autoSaveDraft', s.autoSaveDraft)" />
+        </label>
+        <label class="flex items-center justify-between py-3">
+          <span class="text-sm text-gray-700">Hiển thị gợi ý AI</span>
+          <input type="checkbox" [checked]="s.showAiSuggestions" (change)="toggleOption('showAiSuggestions', s.showAiSuggestions)" />
+        </label>
+        <label class="flex items-center justify-between py-3">
+          <span class="text-sm text-gray-700">Xác nhận trước khi đăng</span>
+          <input type="checkbox" [checked]="s.confirmBeforePost" (change)="toggleOption('confirmBeforePost', s.confirmBeforePost)" />
+        </label>
+      </div>
+    </div>
+  }
+
+  @if (systemInfo(); as info) {
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+      <h2 class="mb-3 text-sm font-semibold text-gray-900">Thông tin hệ thống</h2>
+      <div class="flex flex-wrap gap-6 text-sm">
+        <div><p class="text-gray-400">Phiên bản</p><p class="font-medium text-gray-900">{{ info.appVersion }}</p></div>
+        <div><p class="text-gray-400">Dung lượng đã dùng</p><p class="font-medium text-gray-900">{{ info.storageUsed }} / {{ info.storageLimit }} MB ({{ storagePercent() }}%)</p></div>
+        <div><p class="text-gray-400">Sao lưu lần cuối</p><p class="font-medium text-gray-900">{{ formatDateTime(info.lastBackupAt) }}</p></div>
+        <div class="ml-auto">
+          <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" (click)="backupNow()">
+            Sao lưu ngay
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

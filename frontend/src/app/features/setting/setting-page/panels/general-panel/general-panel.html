@@ -1,0 +1,117 @@
+<div class="flex flex-col gap-4">
+  <div class="rounded-xl border border-gray-200 bg-white p-4">
+    <h2 class="text-sm font-semibold text-gray-900">Giao diện</h2>
+    <p class="mb-3 text-xs text-gray-400">Tùy chỉnh cách hiển thị và trải nghiệm giao diện</p>
+
+    <div class="mb-3">
+      <label class="mb-1 block text-xs font-medium text-gray-500">Chế độ giao diện</label>
+      <p class="mb-2 text-xs text-gray-400">Chọn giao diện hiển thị phù hợp với bạn</p>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        @for (opt of themeOptions; track opt.value) {
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium"
+            [class]="themeMode() === opt.value ? 'border-[var(--color-brand)] bg-[var(--color-status-info-bg)] text-[var(--color-brand)]' : 'border-gray-300 text-gray-700 hover:bg-gray-50'"
+            (click)="selectTheme(opt.value)"
+          >
+            <app-icon [icon]="opt.icon" [size]="16" />
+            {{ opt.label }}
+            @if (themeMode() === opt.value) {
+              <span class="ml-auto h-2 w-2 rounded-full bg-[var(--color-brand)]"></span>
+            }
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="mb-1 block text-xs font-medium text-gray-500">Mật độ hiển thị</label>
+      <p class="mb-2 text-xs text-gray-400">Điều chỉnh mật độ hiển thị của giao diện</p>
+      <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:max-w-xs" [ngModel]="displayDensity()" (ngModelChange)="displayDensity.set($event); saveAppearance()">
+        @for (opt of densityOptions; track opt.value) {
+          <option [value]="opt.value">{{ opt.label }}</option>
+        }
+      </select>
+    </div>
+
+    <div>
+      <label class="mb-1 block text-xs font-medium text-gray-500">Ngôn ngữ</label>
+      <p class="mb-2 text-xs text-gray-400">Chọn ngôn ngữ hiển thị của ứng dụng</p>
+      <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:max-w-xs" [ngModel]="language()" (ngModelChange)="language.set($event); saveAppearance()">
+        <option value="vi">🇻🇳 Tiếng Việt</option>
+        <option value="en">🇬🇧 English</option>
+      </select>
+    </div>
+  </div>
+
+  @if (settings(); as s) {
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+      <h2 class="text-sm font-semibold text-gray-900">Tùy chọn hệ thống</h2>
+      <p class="mb-3 text-xs text-gray-400">Thiết lập các tùy chọn vận hành hệ thống</p>
+
+      <div class="flex flex-col divide-y divide-gray-100">
+        <label class="flex items-center justify-between py-3">
+          <span>
+            <span class="block text-sm font-medium text-gray-900">Xác nhận trước khi xóa</span>
+            <span class="block text-xs text-gray-400">Hiển thị hộp thoại xác nhận khi xóa dữ liệu</span>
+          </span>
+          <input type="checkbox" [checked]="s.confirmBeforeDelete" (change)="toggleOption('confirmBeforeDelete', s.confirmBeforeDelete)" />
+        </label>
+        <label class="flex items-center justify-between py-3">
+          <span>
+            <span class="block text-sm font-medium text-gray-900">Tự động lưu thay đổi</span>
+            <span class="block text-xs text-gray-400">Tự động lưu các thay đổi khi bạn thao tác</span>
+          </span>
+          <input type="checkbox" [checked]="s.autoSaveChanges" (change)="toggleOption('autoSaveChanges', s.autoSaveChanges)" />
+        </label>
+        <label class="flex items-center justify-between py-3">
+          <span>
+            <span class="block text-sm font-medium text-gray-900">Phát âm thanh thông báo</span>
+            <span class="block text-xs text-gray-400">Phát âm thanh khi có thông báo mới</span>
+          </span>
+          <input type="checkbox" [checked]="s.notificationSound" (change)="toggleOption('notificationSound', s.notificationSound)" />
+        </label>
+        <label class="flex items-center justify-between py-3">
+          <span>
+            <span class="block text-sm font-medium text-gray-900">Hiển thị gợi ý nhanh</span>
+            <span class="block text-xs text-gray-400">Hiển thị gợi ý và hướng dẫn khi sử dụng</span>
+          </span>
+          <input type="checkbox" [checked]="s.showQuickHints" (change)="toggleOption('showQuickHints', s.showQuickHints)" />
+        </label>
+        <label class="flex items-center justify-between py-3">
+          <span>
+            <span class="block text-sm font-medium text-gray-900">Theo dõi hiệu suất</span>
+            <span class="block text-xs text-gray-400">Cho phép thu thập dữ liệu để cải thiện hiệu suất ứng dụng</span>
+          </span>
+          <input type="checkbox" [checked]="s.performanceTracking" (change)="toggleOption('performanceTracking', s.performanceTracking)" />
+        </label>
+      </div>
+    </div>
+  }
+
+  <div class="rounded-xl border border-gray-200 bg-white p-4">
+    <h2 class="mb-3 text-sm font-semibold text-gray-900">Khác</h2>
+    <div class="flex flex-col divide-y divide-gray-100">
+      <div class="flex items-center justify-between py-3">
+        <span>
+          <span class="block text-sm font-medium text-gray-900">Xuất dữ liệu</span>
+          <span class="block text-xs text-gray-400">Xuất dữ liệu hệ thống và tùy chọn của bạn</span>
+        </span>
+        <button type="button" class="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" [disabled]="exporting()" (click)="exportData()">
+          <app-icon [icon]="downloadIcon" [size]="14" />
+          Xuất dữ liệu
+        </button>
+      </div>
+      <div class="flex items-center justify-between py-3">
+        <span>
+          <span class="block text-sm font-medium text-gray-900">Đặt lại cài đặt</span>
+          <span class="block text-xs text-gray-400">Đặt lại tất cả cài đặt về mặc định</span>
+        </span>
+        <button type="button" class="flex items-center gap-1.5 rounded-lg border border-[var(--color-status-danger)] px-3 py-1.5 text-sm font-medium text-[var(--color-status-danger)] hover:bg-[var(--color-status-danger-bg)] disabled:opacity-50" [disabled]="resetting()" (click)="resetSettings()">
+          <app-icon [icon]="resetIcon" [size]="14" />
+          Đặt lại cài đặt
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

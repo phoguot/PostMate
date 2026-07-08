@@ -1,0 +1,141 @@
+<app-page-header title="Cookie" subtitle="Quản lý cookie phiên đăng nhập Facebook dùng để đăng bài">
+  <button type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" (click)="refreshAll()">
+    Làm mới tất cả
+  </button>
+</app-page-header>
+
+@if (stats(); as s) {
+  <div class="mb-6 flex flex-wrap gap-4">
+    <app-stat-card [icon]="cookieIcon" label="Tổng cookie" [value]="s.total" tone="info" />
+    <app-stat-card [icon]="shieldIcon" label="Hợp lệ" [value]="s.valid" tone="success" />
+    <app-stat-card [icon]="clockIcon" label="Sắp hết hạn" [value]="s.expiring" tone="warning" />
+    <app-stat-card [icon]="alertIcon" label="Không hợp lệ" [value]="s.invalid" tone="danger" />
+  </div>
+}
+
+<div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3">
+  <input
+    type="text"
+    placeholder="Tìm kiếm cookie, tài khoản..."
+    class="min-w-[220px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+    [ngModel]="keyword()"
+    (ngModelChange)="keyword.set($event)"
+    (keyup.enter)="applyFilters()"
+  />
+  <select class="rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+    <option [ngValue]="''">Trạng thái: Tất cả</option>
+    @for (opt of statusOptions; track opt.value) {
+      <option [ngValue]="opt.value">{{ opt.label }}</option>
+    }
+  </select>
+  <button type="button" class="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-sm font-medium text-white" (click)="applyFilters()">
+    Lọc
+  </button>
+</div>
+
+<div class="flex gap-4">
+  <div class="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-100 bg-gray-50 text-left text-xs text-gray-500">
+          <th class="px-4 py-3 font-medium">Cookie</th>
+          <th class="px-4 py-3 font-medium">Tài khoản</th>
+          <th class="px-4 py-3 font-medium">Trình duyệt</th>
+          <th class="px-4 py-3 font-medium">Fanpage</th>
+          <th class="px-4 py-3 font-medium">Trạng thái</th>
+          <th class="px-4 py-3 font-medium">Lần đăng nhập cuối</th>
+          <th class="px-4 py-3 font-medium">Thao tác</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (ck of cookies(); track ck.id) {
+          <tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="px-4 py-3">
+              <p class="font-medium text-gray-900">{{ ck.code }}</p>
+              <p class="text-xs text-gray-400">{{ ck.sizeKb }} KB</p>
+            </td>
+            <td class="px-4 py-3 text-gray-600">{{ ck.facebookAccount?.name ?? '-' }}</td>
+            <td class="px-4 py-3 text-gray-600">{{ ck.browserProfile?.name ?? '-' }}</td>
+            <td class="px-4 py-3 text-gray-600">{{ ck.fanpages.length }} fanpage</td>
+            <td class="px-4 py-3">
+              <app-status-badge [label]="statusMeta[ck.status]?.label ?? '—'" [tone]="statusMeta[ck.status]?.tone ?? 'neutral'" />
+            </td>
+            <td class="px-4 py-3 text-gray-500">{{ formatDateTime(ck.lastLoginAt) }}</td>
+            <td class="px-4 py-3">
+              <button type="button" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100" (click)="openDetail(ck)">
+                Xem chi tiết
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-400">
+              @if (loading()) { Đang tải... } @else { Không tìm thấy cookie nào. }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <app-pagination
+      [page]="paginator().page"
+      [pageSize]="paginator().pageSize"
+      [totalItems]="paginator().totalItems"
+      [totalPages]="paginator().totalPages"
+      (pageChange)="load($event)"
+    />
+  </div>
+
+  @if (selected(); as ck) {
+    <div class="w-[360px] shrink-0">
+      <app-detail-drawer [open]="true" [title]="ck.code ?? ''" [subtitle]="ck.facebookAccount?.name ?? ''" (closed)="closeDetail()">
+        <div class="flex border-b border-gray-100 px-4">
+          <button type="button" class="border-b-2 px-3 py-2 text-sm font-medium" [class]="activeTab() === 'info' ? 'border-[var(--color-brand)] text-[var(--color-brand)]' : 'border-transparent text-gray-500'" (click)="activeTab.set('info')">
+            Thông tin
+          </button>
+          <button type="button" class="border-b-2 px-3 py-2 text-sm font-medium" [class]="activeTab() === 'log' ? 'border-[var(--color-brand)] text-[var(--color-brand)]' : 'border-transparent text-gray-500'" (click)="activeTab.set('log')">
+            Nhật ký
+          </button>
+        </div>
+
+        @if (activeTab() === 'info') {
+          <dl class="flex flex-col gap-3 p-4 text-sm">
+            <div class="flex items-center justify-between"><dt class="text-gray-500">Tài khoản</dt><dd class="font-medium text-gray-900">{{ ck.facebookAccount?.name ?? '-' }}</dd></div>
+            <div class="flex items-center justify-between"><dt class="text-gray-500">Trình duyệt</dt><dd class="font-medium text-gray-900">{{ ck.browserProfile?.name ?? '-' }}</dd></div>
+            <div class="flex items-center justify-between"><dt class="text-gray-500">Dung lượng</dt><dd class="font-medium text-gray-900">{{ ck.sizeKb }} KB</dd></div>
+            <div class="flex items-center justify-between"><dt class="text-gray-500">Trạng thái</dt><dd><app-status-badge [label]="statusMeta[ck.status]?.label ?? '—'" [tone]="statusMeta[ck.status]?.tone ?? 'neutral'" /></dd></div>
+            <div class="flex items-center justify-between"><dt class="text-gray-500">Hết hạn</dt><dd class="font-medium text-gray-900">{{ formatDateTime(ck.expiresAt) }} @if (ck.daysLeft !== null) { ({{ ck.daysLeft }} ngày nữa) }</dd></div>
+            <div class="flex items-center justify-between"><dt class="text-gray-500">Lần đăng nhập cuối</dt><dd class="font-medium text-gray-900">{{ formatDateTime(ck.lastLoginAt) }}</dd></div>
+            <div class="flex items-center justify-between"><dt class="text-gray-500">IP đăng nhập</dt><dd class="font-medium text-gray-900">{{ ck.lastLoginIp ?? '-' }}</dd></div>
+            <div class="flex items-center justify-between"><dt class="text-gray-500">Thiết bị</dt><dd class="font-medium text-gray-900">{{ ck.device ?? '-' }}</dd></div>
+            @if (ck.fanpages.length) {
+              <div>
+                <dt class="mb-1 text-gray-500">Fanpage liên kết ({{ ck.fanpages.length }})</dt>
+                <dd class="flex flex-wrap gap-1.5">
+                  @for (name of ck.fanpages; track name) {
+                    <span class="rounded-full bg-gray-100 px-2 py-1 text-xs">{{ name }}</span>
+                  }
+                </dd>
+              </div>
+            }
+          </dl>
+
+          <div class="flex flex-col gap-2 border-t border-gray-100 p-4">
+            <button type="button" class="rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-medium text-white" (click)="login(ck)">
+              Đăng nhập
+            </button>
+            <button type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" (click)="refresh(ck)">
+              Làm mới cookie
+            </button>
+            <button type="button" class="rounded-lg border border-[var(--color-status-danger)] px-3 py-2 text-sm font-medium text-[var(--color-status-danger)] hover:bg-[var(--color-status-danger-bg)]" (click)="deleteCookie(ck)">
+              Xóa cookie
+            </button>
+          </div>
+        }
+
+        @if (activeTab() === 'log') {
+          <p class="p-6 text-center text-sm text-gray-400">Chưa có API nhật ký hoạt động cho cookie — sẽ được bổ sung sau.</p>
+        }
+      </app-detail-drawer>
+    </div>
+  }
+</div>

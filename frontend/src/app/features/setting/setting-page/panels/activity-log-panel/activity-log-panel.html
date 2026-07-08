@@ -1,0 +1,100 @@
+<div class="rounded-xl border border-gray-200 bg-white p-4">
+  <h2 class="text-sm font-semibold text-gray-900">Nhật ký hoạt động</h2>
+  <p class="mb-3 text-xs text-gray-400">Theo dõi và xem lại các hoạt động đã xảy ra trên hệ thống</p>
+
+  <div class="mb-3 flex flex-wrap items-center gap-2">
+    <input
+      type="text"
+      placeholder="Tìm kiếm hoạt động..."
+      class="min-w-[220px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+      [ngModel]="keyword()"
+      (ngModelChange)="keyword.set($event)"
+      (keyup.enter)="applyFilters()"
+    />
+    <select class="rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="type()" (ngModelChange)="type.set($event)">
+      <option value="">Tất cả hành động</option>
+      @for (t of typeOptions; track t) {
+        <option [value]="t">{{ t }}</option>
+      }
+    </select>
+    <select class="rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="objectType()" (ngModelChange)="objectType.set($event)">
+      <option value="">Tất cả đối tượng</option>
+      @for (t of objectTypeOptions; track t) {
+        <option [value]="t">{{ t }}</option>
+      }
+    </select>
+    <input type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event)" />
+    <input type="date" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event)" />
+    <button type="button" class="flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" (click)="applyFilters()">
+      <app-icon [icon]="filterIcon" [size]="14" />
+      Bộ lọc
+    </button>
+  </div>
+
+  <div class="overflow-x-auto rounded-lg border border-gray-100">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-100 bg-gray-50 text-left text-xs text-gray-500">
+          <th class="px-4 py-3 font-medium">Thời gian</th>
+          <th class="px-4 py-3 font-medium">Người dùng</th>
+          <th class="px-4 py-3 font-medium">Hành động</th>
+          <th class="px-4 py-3 font-medium">Đối tượng</th>
+          <th class="px-4 py-3 font-medium">Chi tiết</th>
+          <th class="px-4 py-3 font-medium">IP / Thiết bị</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (log of logs(); track log.id) {
+          <tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="whitespace-nowrap px-4 py-3 text-gray-500">{{ formatDateTime(log.createdAt) }}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2">
+                <div>
+                  <p class="font-medium text-gray-900">{{ log.actor.name ?? '-' }}</p>
+                  @if (log.actor.role) {
+                    <p class="text-xs text-gray-400">{{ log.actor.role }}</p>
+                  }
+                </div>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-gray-700">{{ log.type }}</td>
+            <td class="px-4 py-3">
+              <p class="font-medium text-gray-900">{{ log.objectName ?? '-' }}</p>
+              @if (log.objectType) {
+                <p class="text-xs text-gray-400">{{ log.objectType }}</p>
+              }
+            </td>
+            <td class="max-w-[280px] px-4 py-3 text-gray-500">
+              <p class="truncate" [title]="log.message ?? ''">{{ log.message }}</p>
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-gray-500">
+              <p>{{ log.ipAddress ?? '-' }}</p>
+              <p class="text-xs text-gray-400">{{ log.device ?? '-' }}</p>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-400">
+              @if (loading()) { Đang tải... } @else { Không tìm thấy hoạt động nào. }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 px-4 py-2">
+      <select class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm" [ngModel]="paginator().pageSize" (ngModelChange)="changePageSize($event)">
+        <option [ngValue]="10">10 / trang</option>
+        <option [ngValue]="20">20 / trang</option>
+        <option [ngValue]="50">50 / trang</option>
+      </select>
+    </div>
+    <app-pagination
+      [page]="paginator().page"
+      [pageSize]="paginator().pageSize"
+      [totalItems]="paginator().totalItems"
+      [totalPages]="paginator().totalPages"
+      (pageChange)="load($event)"
+    />
+  </div>
+</div>

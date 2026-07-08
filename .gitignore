@@ -1,0 +1,13 @@
+/.phpcs-cache
+/.phpunit.cache
+/.psalm-cache
+vendor/
+config/development.config.php
+data/cache/*
+!data/cache/.gitkeep
+phpunit.xml
+
+# Frontend dev artifacts
+frontend/node_modules/
+frontend/.angular/
+frontend/dist/
