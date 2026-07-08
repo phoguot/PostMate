@@ -212,10 +212,10 @@ Vào menu **Cài đặt** để cấu hình hệ thống.
 
 ```
   Bạn (trình duyệt)                Máy chủ (WAMP :8080)
- ┌─────────────────┐   gọi API   ┌──────────────────────────────┐
- │  Giao diện web  │ ─────────▶  │  Backend PHP  ──▶  CSDL MySQL │
- │  (Angular SPA)  │ ◀───────── │  (xử lý & lưu dữ liệu)        │
- └─────────────────┘   dữ liệu   └──────────────────────────────┘
+ ┌─────────────────┐   gọi API   ┌───────────────────────────────────┐
+ │  Giao diện web  │ ─────────▶  │  Backend PHP ──▶ CSDL PostgreSQL   │
+ │  (Angular SPA)  │ ◀───────── │  (xử lý & lưu dữ liệu)             │
+ └─────────────────┘   dữ liệu   └───────────────────────────────────┘
 ```
 
 - Mọi thao tác bạn bấm trên màn hình được gửi về máy chủ, xử lý rồi trả kết quả ngay (kèm thông báo thành công/lỗi ở góc màn hình).

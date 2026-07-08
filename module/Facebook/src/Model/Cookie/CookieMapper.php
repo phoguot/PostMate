@@ -261,8 +261,8 @@ class CookieMapper extends AppMapper
             $data['createdAt'] = DateModel::getTimeStampsCurrent();
             $insert = $dbSql->insert(CookieMapper::TABLE_NAME);
             $insert->values($data);
-            $result = $dbAdapter->query($dbSql->buildSqlString($insert), $dbAdapter::QUERY_MODE_EXECUTE);
-            $item->setId((int)$result->getGeneratedValue());
+            $dbAdapter->query($dbSql->buildSqlString($insert), $dbAdapter::QUERY_MODE_EXECUTE);
+            $item->setId($this->getLastInsertId(CookieMapper::TABLE_NAME));
         } else {
             $data['modifiedAt'] = DateModel::getTimeStampsCurrent();
             $update = $dbSql->update(CookieMapper::TABLE_NAME);

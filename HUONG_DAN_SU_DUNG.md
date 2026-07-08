@@ -4,7 +4,7 @@
 
 | Thành phần | Công nghệ | Vai trò | Cổng mặc định |
 |-----------|-----------|---------|---------------|
-| **Backend** | PHP 8.1–8.3 + Laminas MVC + MySQL | REST API (`/api/...`) | `8080` |
+| **Backend** | PHP 8.1–8.3 + Laminas MVC + PostgreSQL | REST API (`/api/...`) | `8080` |
 | **Frontend** | Angular 20 + TailwindCSS | Giao diện quản trị | `4200` (dev) |
 
 Frontend (khi chạy `ng serve`) tự động **proxy** mọi request `/api` sang backend `http://localhost:8080` (xem `frontend/proxy.conf.json`).
@@ -15,46 +15,55 @@ Frontend (khi chạy `ng serve`) tự động **proxy** mọi request `/api` san
 
 | Phần mềm | Phiên bản | Ghi chú |
 |----------|-----------|---------|
-| PHP | 8.1 / 8.2 / 8.3 | Cần bật extension `pdo_mysql`, `intl`, `mbstring` |
+| PHP | 8.1 / 8.2 / 8.3 | Cần bật extension `pdo_pgsql`, `intl`, `mbstring` |
 | Composer | 2.x | Quản lý thư viện PHP |
-| MySQL / MariaDB | 5.7+ / 10.x | Database tên `postmate` |
+| PostgreSQL | 13+ | Database tên `postmate` |
 | Node.js | 20+ | Kèm npm, để chạy Angular |
 | Angular CLI | 20 | Có thể dùng qua `npx ng` nếu không cài global |
 
-> Kiểm tra nhanh: `php -v`, `composer --version`, `node -v`, `mysql --version`.
-> Máy hiện tại đã có sẵn PHP 8.3.28, Composer 2.9.2, extension `pdo_mysql`. Thư mục `vendor/` (backend) và `frontend/node_modules/` cũng đã được cài sẵn.
+> Kiểm tra nhanh: `php -v`, `composer --version`, `node -v`, `psql --version`.
+> Máy hiện tại đã có sẵn PHP 8.3.28, Composer 2.9.2. Thư mục `vendor/` (backend) và `frontend/node_modules/` cũng đã được cài sẵn. WAMP đi kèm `php_pdo_pgsql.dll` nhưng **mặc định đang tắt** — xem mục "Bật extension pdo_pgsql cho WAMP" bên dưới.
 
 ---
 
 ## 2. Cài đặt cơ sở dữ liệu
 
-Database mặc định tên **`postmate`** (khai báo trong `config/autoload/local.php`).
+Database mặc định tên **`postmate`** (khai báo trong `config/autoload/local.php`), dùng **PostgreSQL**.
 
 ```bash
-# 1. Tạo database (nếu file .sql chưa có lệnh CREATE DATABASE)
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS postmate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+# 1. Tạo database
+createdb -U postgres postmate
+# (hoặc: psql -U postgres -c "CREATE DATABASE postmate ENCODING 'UTF8';")
 
 # 2. Import toàn bộ bảng (users, posts, post_media, fanpages, browser_profiles, cookies, settings, ...)
-mysql -u root -p postmate < data/db/postmate.sql
+psql -U postgres -d postmate -f data/db/postmate.sql
 ```
 
-> File `data/db/postmate.sql` chứa đầy đủ schema theo `docs/PHAN_TICH_HE_THONG.md`.
+> File `data/db/postmate.sql` chứa đầy đủ schema theo `docs/PHAN_TICH_HE_THONG.md`. Không thể gộp bước tạo database và bước import vào 1 lệnh psql duy nhất — PostgreSQL yêu cầu kết nối tới đúng database trước khi tạo bảng trong đó (khác với MySQL `CREATE DATABASE` + `USE`).
 
 ### Chỉnh thông tin kết nối DB
 
-Sửa file `config/autoload/local.php` cho khớp MySQL của bạn:
+Sửa file `config/autoload/local.php` cho khớp PostgreSQL của bạn:
 
 ```php
 'db' => [
-    'driver'   => 'Pdo_Mysql',
+    'driver'   => 'Pdo_Pgsql',
     'host'     => 'localhost',
-    'port'     => 3306,
+    'port'     => 5432,
     'database' => 'postmate',
-    'username' => 'root',
-    'password' => '',        // <-- điền mật khẩu MySQL của bạn
-    'charset'  => 'utf8mb4',
+    'username' => 'postgres',
+    'password' => '',        // <-- điền mật khẩu PostgreSQL của bạn
+    'charset'  => 'utf8',
 ],
 ```
+
+### Bật extension `pdo_pgsql` cho WAMP
+
+WAMP đã có sẵn file `php_pdo_pgsql.dll` nhưng mặc định **tắt**. Cần bật thủ công cho cả PHP dùng bởi Apache lẫn PHP CLI:
+
+1. Click icon WAMP (khay hệ thống) → **PHP → PHP extensions** → tick **pdo_pgsql**. WAMP tự áp dụng cho Apache và gợi ý restart.
+2. Hoặc sửa tay: mở `php.ini` đang dùng (xem `php --ini` / icon WAMP → PHP → php.ini) và bỏ dấu `;` trước dòng `;extension=pdo_pgsql`.
+3. Click icon WAMP → **Restart All Services** để Apache nhận extension mới (đừng dùng `Restart-Service` qua PowerShell nâng quyền).
 
 ---
 
@@ -63,7 +72,7 @@ Sửa file `config/autoload/local.php` cho khớp MySQL của bạn:
 Phục vụ toàn bộ ứng dụng (giao diện Angular đã build trong `public/` + API PHP) qua Apache của WAMP, **không cần** `composer serve` hay `ng serve`. Truy cập tại **http://localhost:8080**.
 
 **Điều kiện:**
-- Apache của WAMP đang dùng **PHP 8.2.0** (bản dự án hỗ trợ) và đã bật extension `pdo_mysql` (mặc định WAMP có bật).
+- Apache của WAMP đang dùng **PHP 8.2.0 / 8.3.x** (bản dự án hỗ trợ) và đã bật extension `pdo_pgsql` (xem mục 2 → "Bật extension `pdo_pgsql` cho WAMP" — **mặc định WAMP tắt extension này**, khác với `pdo_mysql`).
 - Thư mục `public/` đã chứa bản build Angular. Nếu sửa code frontend và muốn cập nhật giao diện, chạy lại `cd frontend && npm run build` (build xuất thẳng vào `public/`).
 
 **Cấu hình VirtualHost** (đã thêm vào `C:\wamp64\bin\apache\apache2.4.54.2\conf\extra\httpd-vhosts.conf`):
@@ -86,11 +95,11 @@ Listen 8080
 
 **Các bước:**
 1. Đảm bảo không có tiến trình nào chiếm port 8080 (tắt `composer serve` cũ nếu còn: Ctrl+C, hoặc End task `php.exe` trong Task Manager).
-2. Import DB: dùng **phpMyAdmin** của WAMP (http://localhost/phpmyadmin) tạo database `postmate` rồi Import file `data/db/postmate.sql`. (Hoặc dùng lệnh `mysql` ở mục 2.)
-3. Click icon **WAMP** → **Restart All Services**.
+2. Cài PostgreSQL riêng (WAMP không kèm sẵn PostgreSQL server, chỉ kèm PHP driver) rồi tạo + import DB theo lệnh ở mục 2 (`createdb` + `psql -f`).
+3. Bật extension `pdo_pgsql` theo hướng dẫn ở mục 2, rồi click icon **WAMP** → **Restart All Services**.
 4. Mở **http://localhost:8080**.
 
-> **Đổi PHP version cho Apache:** click icon WAMP → **PHP → Version → chọn 8.1/8.2/8.3** (tránh 8.4/8.5 vì dự án chưa hỗ trợ). Sau khi đổi, kiểm tra `pdo_mysql` đã bật trong **PHP → PHP extensions**.
+> **Đổi PHP version cho Apache:** click icon WAMP → **PHP → Version → chọn 8.1/8.2/8.3** (tránh 8.4/8.5 vì dự án chưa hỗ trợ). Sau khi đổi, kiểm tra `pdo_pgsql` đã bật trong **PHP → PHP extensions**.
 
 ---
 
@@ -173,7 +182,7 @@ composer serve         # http://localhost:8080  -> giao diện + API cùng cổn
 docker-compose up --build     # ứng dụng chạy tại http://localhost:8080
 ```
 
-> **Lưu ý Docker:** `Dockerfile` mặc định **chưa bật** extension `pdo_mysql`. Cần mở comment dòng `RUN docker-php-ext-install pdo_mysql` trong `Dockerfile` trước khi build, và trỏ `host` DB trong `local.php` tới MySQL phù hợp (không phải `localhost` của container).
+> **Lưu ý Docker:** `Dockerfile` đã bật sẵn extension `pdo_pgsql`. Trỏ `host` DB trong `local.php` tới PostgreSQL phù hợp (không phải `localhost` của container, trừ khi PostgreSQL cũng chạy trong cùng mạng Docker).
 
 ---
 
@@ -182,7 +191,8 @@ docker-compose up --build     # ứng dụng chạy tại http://localhost:8080
 ```bash
 # ===== Terminal 1: Backend =====
 composer install            # lần đầu
-mysql -u root -p postmate < data/db/postmate.sql   # lần đầu
+createdb -U postgres postmate                       # lần đầu
+psql -U postgres -d postmate -f data/db/postmate.sql   # lần đầu
 composer development-enable
 composer serve              # -> http://localhost:8080
 
@@ -214,10 +224,9 @@ Mở **http://localhost:4200** để sử dụng ứng dụng.
 
 | Triệu chứng | Nguyên nhân & cách xử lý |
 |-------------|--------------------------|
-| `Undefined constant PDO::MYSQL_ATTR_INIT_COMMAND` | PHP phục vụ request chưa bật `pdo_mysql`. Nên chạy bằng `composer serve` (dùng PHP CLI đã có sẵn extension), **không** phục vụ qua Apache của WAMP. Nếu vẫn dùng WAMP Apache: bật `pdo_mysql` qua icon WAMP → PHP → PHP extensions rồi restart Apache |
-| `could not find driver` khi gọi API | Chưa bật extension `pdo_mysql` trong `php.ini` của PHP đang chạy. WAMP có `php.ini` cho CLI và Apache **riêng biệt** — bật cho đúng cái đang dùng |
+| `could not find driver` khi gọi API | Chưa bật extension `pdo_pgsql` trong `php.ini` của PHP đang chạy. WAMP có `php.ini` cho CLI và Apache **riêng biệt** — bật cho đúng cái đang dùng (xem mục 2) |
 | Frontend gọi API bị lỗi 404 / CORS | Backend chưa chạy ở port 8080, hoặc `proxy.conf.json` trỏ sai target |
-| `Access denied for user 'root'` | Sai `username`/`password` trong `config/autoload/local.php` |
+| `password authentication failed for user "postgres"` | Sai `username`/`password` trong `config/autoload/local.php`, hoặc `pg_hba.conf` của PostgreSQL đang yêu cầu phương thức xác thực khác (vd `scram-sha-256`/`peer`) |
 | Sửa config nhưng không có tác dụng | Chạy `composer clear-config-cache` |
 | `Unable to load application` | Chưa chạy `composer install` (thiếu thư mục `vendor/`) |
 | `ng: command not found` | Dùng `npx ng ...` hoặc `npm start` thay vì gọi `ng` trực tiếp |

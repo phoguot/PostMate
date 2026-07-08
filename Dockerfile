@@ -46,8 +46,8 @@ RUN apt-get install --yes libicu-dev \
 # RUN docker-php-ext-install pdo_mysql
 
 ## PostgreSQL PDO support
-# RUN apt-get install --yes libpq-dev \
-#     && docker-php-ext-install pdo_pgsql
+RUN apt-get install --yes libpq-dev \
+    && docker-php-ext-install pdo_pgsql
 
 ###
 ## laminas/laminas-cache supported extensions

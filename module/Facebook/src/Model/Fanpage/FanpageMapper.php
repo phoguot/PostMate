@@ -254,8 +254,8 @@ class FanpageMapper extends AppMapper
             $data['createdAt'] = DateModel::getTimeStampsCurrent();
             $insert = $dbSql->insert(FanpageMapper::TABLE_NAME);
             $insert->values($data);
-            $result = $dbAdapter->query($dbSql->buildSqlString($insert), $dbAdapter::QUERY_MODE_EXECUTE);
-            $item->setId((int)$result->getGeneratedValue());
+            $dbAdapter->query($dbSql->buildSqlString($insert), $dbAdapter::QUERY_MODE_EXECUTE);
+            $item->setId($this->getLastInsertId(FanpageMapper::TABLE_NAME));
         } else {
             $data['modifiedAt'] = DateModel::getTimeStampsCurrent();
             $update = $dbSql->update(FanpageMapper::TABLE_NAME);

@@ -286,11 +286,11 @@ class PostMapper extends AppMapper
 
             $insert = $dbSql->insert(PostMapper::TABLE_NAME);
             $insert->values($data);
-            $result = $dbAdapter->query(
+            $dbAdapter->query(
                 $dbSql->buildSqlString($insert),
                 $dbAdapter::QUERY_MODE_EXECUTE
             );
-            $item->setId((int)$result->getGeneratedValue());
+            $item->setId($this->getLastInsertId(PostMapper::TABLE_NAME));
         } else {
             $data['modifiedById'] = $item->getUserId();
             $data['modifiedAt']   = DateModel::getTimeStampsCurrent();

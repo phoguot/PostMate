@@ -29,4 +29,17 @@ class AppMapper extends AppServiceFactory
     {
         return new TableGateway($tableName, $this->getDbAdapter());
     }
+
+    /**
+     * Lấy id vừa insert. Trên PostgreSQL, PDO::lastInsertId() bắt buộc phải
+     * truyền tên sequence (khác MySQL) — Laminas\Db trả về null nếu gọi
+     * getGeneratedValue()/getLastGeneratedValue() không tham số trên driver pgsql.
+     * Quy ước IDENTITY trong data/db/postmate.sql luôn đặt tên sequence là
+     * "{table}_id_seq" (giống SERIAL mặc định của Postgres).
+     */
+    protected function getLastInsertId(string $tableName): int
+    {
+        return (int) $this->getDbAdapter()->getDriver()->getConnection()
+            ->getLastGeneratedValue($tableName . '_id_seq');
+    }
 }

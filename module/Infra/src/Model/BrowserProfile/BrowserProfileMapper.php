@@ -284,8 +284,8 @@ class BrowserProfileMapper extends AppMapper
             $data['createdAt']   = DateModel::getTimeStampsCurrent();
             $insert = $dbSql->insert(BrowserProfileMapper::TABLE_NAME);
             $insert->values($data);
-            $result = $dbAdapter->query($dbSql->buildSqlString($insert), $dbAdapter::QUERY_MODE_EXECUTE);
-            $item->setId((int)$result->getGeneratedValue());
+            $dbAdapter->query($dbSql->buildSqlString($insert), $dbAdapter::QUERY_MODE_EXECUTE);
+            $item->setId($this->getLastInsertId(BrowserProfileMapper::TABLE_NAME));
         } else {
             $data['modifiedAt'] = DateModel::getTimeStampsCurrent();
             $update = $dbSql->update(BrowserProfileMapper::TABLE_NAME);
