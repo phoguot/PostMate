@@ -9,6 +9,8 @@
 
 Frontend (khi chạy `ng serve`) tự động **proxy** mọi request `/api` sang backend `http://localhost:8080` (xem `proxy.conf.json` trong repo `PostMate-Frontend`).
 
+> **Lưu ý kiến trúc:** BE và FE là 2 repo độc lập, build/deploy riêng. Backend chỉ phục vụ REST API dưới `/api`, không còn serve giao diện Angular đã build. Nếu deploy FE ở domain/port khác BE (khác origin `http://localhost:8080`), cần bật CORS phía backend cho origin của FE — hiện dự án **chưa cấu hình CORS**, cần thêm trước khi deploy tách domain thật.
+
 ---
 
 ## 1. Yêu cầu môi trường
@@ -58,18 +60,17 @@ Sửa file `config/autoload/local.php` cho khớp MySQL của bạn:
 
 ---
 
-## 3-A. Chạy bằng WAMP (Apache) — cách đang dùng
+## 3-A. Chạy Backend bằng WAMP (Apache)
 
-Phục vụ toàn bộ ứng dụng (giao diện Angular đã build trong `public/` + API PHP) qua Apache của WAMP, **không cần** `composer serve` hay `ng serve`. Truy cập tại **http://localhost:8080**.
+Phục vụ **API PHP** qua Apache của WAMP, **không cần** `composer serve`. Đây chỉ là REST API — giao diện Angular chạy/deploy riêng ở repo `PostMate-Frontend` (xem mục 4).
 
 **Điều kiện:**
 - Apache của WAMP đang dùng **PHP 8.2.0** (bản dự án hỗ trợ) và đã bật extension `pdo_mysql` (mặc định WAMP có bật).
-- Thư mục `public/` đã chứa bản build Angular. Nếu sửa code frontend và muốn cập nhật giao diện, chạy lại `npm run build` trong repo `PostMate-Frontend` với output trỏ tới `../AutoPostSocial/public` (build xuất thẳng vào `public/` của backend).
 
 **Cấu hình VirtualHost** (đã thêm vào `C:\wamp64\bin\apache\apache2.4.54.2\conf\extra\httpd-vhosts.conf`):
 
 ```apache
-# PostMate — truy cập qua http://localhost:8080
+# PostMate API — truy cập qua http://localhost:8080
 Listen 8080
 <VirtualHost *:8080>
     ServerName localhost
@@ -82,13 +83,13 @@ Listen 8080
 </VirtualHost>
 ```
 
-> File `public/.htaccess` tự định tuyến: `/api/*` → `index.php` (Laminas), route SPA còn lại → `index.html` (Angular). Cần bật `mod_rewrite` (WAMP mặc định đã bật).
+> File `public/.htaccess` định tuyến mọi request `/api/*` → `index.php` (Laminas). Cần bật `mod_rewrite` (WAMP mặc định đã bật).
 
 **Các bước:**
 1. Đảm bảo không có tiến trình nào chiếm port 8080 (tắt `composer serve` cũ nếu còn: Ctrl+C, hoặc End task `php.exe` trong Task Manager).
 2. Import DB: dùng **phpMyAdmin** của WAMP (http://localhost/phpmyadmin) tạo database `postmate` rồi Import file `data/db/postmate.sql`. (Hoặc dùng lệnh `mysql` ở mục 2.)
 3. Click icon **WAMP** → **Restart All Services**.
-4. Mở **http://localhost:8080**.
+4. API sẵn sàng tại **http://localhost:8080/api/...**. Mở giao diện qua frontend (mục 4), không mở trực tiếp `http://localhost:8080`.
 
 > **Đổi PHP version cho Apache:** click icon WAMP → **PHP → Version → chọn 8.1/8.2/8.3** (tránh 8.4/8.5 vì dự án chưa hỗ trợ). Sau khi đổi, kiểm tra `pdo_mysql` đã bật trong **PHP → PHP extensions**.
 
@@ -133,7 +134,7 @@ Kiểm tra backend đã chạy: mở `http://localhost:8080` — nếu load đư
 Mở **một terminal mới**:
 
 ```bash
-cd frontend
+cd ../PostMate-Frontend
 
 # (Chỉ lần đầu, hoặc khi node_modules/ chưa có) cài thư viện
 npm install
@@ -152,20 +153,20 @@ Mở trình duyệt: **http://localhost:4200**
 
 ## 5. Build production (triển khai thật)
 
-Angular được cấu hình build thẳng vào thư mục `public/` của backend (xem `angular.json` → `outputPath.base = ../public`). Khi đó chỉ cần chạy backend PHP là phục vụ được cả giao diện lẫn API.
+BE và FE build/deploy **độc lập**:
 
 ```bash
-# 1. Build frontend vào public/
-cd frontend
-npm run build          # = ng build
-
-# 2. Tắt development mode cho backend (tối ưu, ẩn lỗi chi tiết)
-cd ..
+# Backend: tắt development mode (tối ưu, ẩn lỗi chi tiết), rồi serve API
 composer development-disable
+composer serve          # http://localhost:8080/api/...
 
-# 3. Phục vụ toàn bộ ứng dụng qua PHP (hoặc dùng Apache/Nginx trỏ vào public/)
-composer serve         # http://localhost:8080  -> giao diện + API cùng cổng
+# Frontend (repo PostMate-Frontend): build ra dist/frontend
+cd ../PostMate-Frontend
+npm run build            # = ng build, output: dist/frontend
+# Deploy thư mục dist/frontend lên static host/Nginx/CDN riêng (khác origin với BE)
 ```
+
+> Vì FE và BE chạy khác origin, cần bật **CORS** phía backend cho origin của FE trước khi deploy thật (dự án hiện chưa có middleware CORS).
 
 ### Hoặc dùng Docker
 
@@ -186,8 +187,8 @@ mysql -u root -p postmate < data/db/postmate.sql   # lần đầu
 composer development-enable
 composer serve              # -> http://localhost:8080
 
-# ===== Terminal 2: Frontend =====
-cd frontend
+# ===== Terminal 2: Frontend (repo PostMate-Frontend) =====
+cd ../PostMate-Frontend
 npm install                 # lần đầu
 npm start                   # -> http://localhost:4200
 ```
@@ -205,8 +206,8 @@ Mở **http://localhost:4200** để sử dụng ứng dụng.
 | `composer test` | Chạy unit test (PHPUnit) |
 | `composer cs-check` / `composer cs-fix` | Kiểm tra / tự sửa coding standard |
 | `composer static-analysis` | Phân tích tĩnh bằng Psalm |
-| `cd frontend && npm run build` | Build frontend vào `public/` |
-| `cd frontend && npm test` | Chạy test frontend (Karma) |
+| `npm run build` (trong `PostMate-Frontend`) | Build frontend vào `dist/frontend` |
+| `npm test` (trong `PostMate-Frontend`) | Chạy test frontend (Karma) |
 
 ---
 
@@ -216,35 +217,41 @@ Mở **http://localhost:4200** để sử dụng ứng dụng.
 |-------------|--------------------------|
 | `Undefined constant PDO::MYSQL_ATTR_INIT_COMMAND` | PHP phục vụ request chưa bật `pdo_mysql`. Nên chạy bằng `composer serve` (dùng PHP CLI đã có sẵn extension), **không** phục vụ qua Apache của WAMP. Nếu vẫn dùng WAMP Apache: bật `pdo_mysql` qua icon WAMP → PHP → PHP extensions rồi restart Apache |
 | `could not find driver` khi gọi API | Chưa bật extension `pdo_mysql` trong `php.ini` của PHP đang chạy. WAMP có `php.ini` cho CLI và Apache **riêng biệt** — bật cho đúng cái đang dùng |
-| Frontend gọi API bị lỗi 404 / CORS | Backend chưa chạy ở port 8080, hoặc `proxy.conf.json` trỏ sai target |
+| Frontend gọi API bị lỗi 404 / CORS | Backend chưa chạy ở port 8080, hoặc `proxy.conf.json` trỏ sai target. Nếu deploy khác origin (không qua `ng serve` proxy), cần bật CORS ở backend cho origin của FE |
 | `Access denied for user 'root'` | Sai `username`/`password` trong `config/autoload/local.php` |
 | Sửa config nhưng không có tác dụng | Chạy `composer clear-config-cache` |
 | `Unable to load application` | Chưa chạy `composer install` (thiếu thư mục `vendor/`) |
 | `ng: command not found` | Dùng `npx ng ...` hoặc `npm start` thay vì gọi `ng` trực tiếp |
-| Đổi port backend | `php -S 0.0.0.0:<port> -t public` và sửa `target` trong `frontend/proxy.conf.json` |
+| Đổi port backend | `php -S 0.0.0.0:<port> -t public` và sửa `target` trong `proxy.conf.json` (repo `PostMate-Frontend`) |
 
 ---
 
 ## 9. Cấu trúc thư mục chính
 
+Hai repo độc lập, nằm cạnh nhau:
+
 ```
-AutoPostSocial/
-├── config/              # Cấu hình Laminas (autoload/local.php = DB, session)
-├── data/db/postmate.sql # Schema cơ sở dữ liệu
-├── docs/                # Tài liệu phân tích hệ thống & tính năng
-├── module/              # Code backend (mỗi domain 1 module)
-│   ├── Application/      #   Lớp nền dùng chung (base controller/mapper/model)
-│   ├── User/            #   Xác thực đăng nhập (/api/user/auth)
-│   ├── Posting/         #   Bài đăng + Dashboard (/api/posting/...)
-│   ├── Facebook/        #   Tài khoản / Fanpage / Cookie (/api/facebook/...)
-│   ├── Infra/           #   Trình duyệt / Server / Proxy (/api/infra/...)
-│   └── Setting/         #   Cấu hình + Meta App (/api/setting/...)
-├── public/              # Web root (index.php + bản build Angular)
-├── frontend/            # Mã nguồn Angular 20
-│   ├── src/app/         #   Các trang & service gọi API
-│   └── proxy.conf.json  #   Proxy /api -> localhost:8080
-├── vendor/              # Thư viện PHP (composer)
-├── composer.json        # Khai báo backend + script serve/test
-├── Dockerfile           # Image PHP 8.3 + Apache
-└── docker-compose.yml   # Chạy nhanh bằng Docker (port 8080)
+E:\My Tool\
+├── AutoPostSocial/         # Repo backend (repo này)
+│   ├── config/              # Cấu hình Laminas (autoload/local.php = DB, session)
+│   ├── data/db/postmate.sql # Schema cơ sở dữ liệu
+│   ├── docs/                # Tài liệu phân tích hệ thống & tính năng
+│   ├── module/              # Code backend (mỗi domain 1 module)
+│   │   ├── Application/      #   Lớp nền dùng chung (base controller/mapper/model)
+│   │   ├── User/            #   Xác thực đăng nhập (/api/user/auth)
+│   │   ├── Posting/         #   Bài đăng + Dashboard (/api/posting/...)
+│   │   ├── Facebook/        #   Tài khoản / Fanpage / Cookie (/api/facebook/...)
+│   │   ├── Infra/           #   Trình duyệt / Server / Proxy (/api/infra/...)
+│   │   └── Setting/         #   Cấu hình + Meta App (/api/setting/...)
+│   ├── public/              # Web root — chỉ index.php (API), không chứa build Angular
+│   ├── vendor/              # Thư viện PHP (composer)
+│   ├── composer.json        # Khai báo backend + script serve/test
+│   ├── Dockerfile           # Image PHP 8.3 + Apache
+│   └── docker-compose.yml   # Chạy nhanh bằng Docker (port 8080)
+│
+└── PostMate-Frontend/       # Repo frontend (Angular 20), git riêng, chưa gắn remote
+    ├── src/app/              # Các trang & service gọi API
+    ├── proxy.conf.json       # Proxy /api -> localhost:8080 (chỉ dùng khi ng serve)
+    ├── angular.json          # outputPath: dist/frontend
+    └── dist/frontend/        # Build output (gitignored), deploy riêng
 ```
