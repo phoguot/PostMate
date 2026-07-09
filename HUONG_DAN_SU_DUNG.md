@@ -1,13 +1,13 @@
 # PostMate (AutoPostSocial) — Hướng dẫn cài đặt & sử dụng
 
-Ứng dụng quản lý và tự động đăng bài mạng xã hội (Facebook). Gồm 2 phần:
+Ứng dụng quản lý và tự động đăng bài mạng xã hội (Facebook). Gồm 2 dự án **repo riêng biệt**:
 
-| Thành phần | Công nghệ | Vai trò | Cổng mặc định |
-|-----------|-----------|---------|---------------|
-| **Backend** | PHP 8.1–8.3 + Laminas MVC + MySQL | REST API (`/api/...`) | `8080` |
-| **Frontend** | Angular 20 + TailwindCSS | Giao diện quản trị | `4200` (dev) |
+| Thành phần | Công nghệ | Vai trò | Cổng mặc định | Repo |
+|-----------|-----------|---------|---------------|------|
+| **Backend** | PHP 8.1–8.3 + Laminas MVC + MySQL | REST API (`/api/...`) | `8080` | `AutoPostSocial` (repo này) |
+| **Frontend** | Angular 20 + TailwindCSS | Giao diện quản trị | `4200` (dev) | `PostMate-Frontend` (thư mục anh em, cạnh repo này) |
 
-Frontend (khi chạy `ng serve`) tự động **proxy** mọi request `/api` sang backend `http://localhost:8080` (xem `frontend/proxy.conf.json`).
+Frontend (khi chạy `ng serve`) tự động **proxy** mọi request `/api` sang backend `http://localhost:8080` (xem `proxy.conf.json` trong repo `PostMate-Frontend`).
 
 ---
 
@@ -22,7 +22,7 @@ Frontend (khi chạy `ng serve`) tự động **proxy** mọi request `/api` san
 | Angular CLI | 20 | Có thể dùng qua `npx ng` nếu không cài global |
 
 > Kiểm tra nhanh: `php -v`, `composer --version`, `node -v`, `mysql --version`.
-> Máy hiện tại đã có sẵn PHP 8.3.28, Composer 2.9.2, extension `pdo_mysql`. Thư mục `vendor/` (backend) và `frontend/node_modules/` cũng đã được cài sẵn.
+> Máy hiện tại đã có sẵn PHP 8.3.28, Composer 2.9.2, extension `pdo_mysql`. Thư mục `vendor/` (backend) và `node_modules/` (trong repo `PostMate-Frontend`) cũng đã được cài sẵn.
 
 ---
 
@@ -64,7 +64,7 @@ Phục vụ toàn bộ ứng dụng (giao diện Angular đã build trong `publi
 
 **Điều kiện:**
 - Apache của WAMP đang dùng **PHP 8.2.0** (bản dự án hỗ trợ) và đã bật extension `pdo_mysql` (mặc định WAMP có bật).
-- Thư mục `public/` đã chứa bản build Angular. Nếu sửa code frontend và muốn cập nhật giao diện, chạy lại `cd frontend && npm run build` (build xuất thẳng vào `public/`).
+- Thư mục `public/` đã chứa bản build Angular. Nếu sửa code frontend và muốn cập nhật giao diện, chạy lại `npm run build` trong repo `PostMate-Frontend` với output trỏ tới `../AutoPostSocial/public` (build xuất thẳng vào `public/` của backend).
 
 **Cấu hình VirtualHost** (đã thêm vào `C:\wamp64\bin\apache\apache2.4.54.2\conf\extra\httpd-vhosts.conf`):
 
