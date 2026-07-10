@@ -30,6 +30,23 @@ class MetaAppService extends AppServiceFactory
         return $identity ? (int)$identity : null;
     }
 
+    /** Đọc trạng thái cấu hình Meta App của user (đã nhập App ID/Secret hay chưa). */
+    public function getMetaAppStatus(array $payload = []): JsonResponse
+    {
+        $apiResult = new ApiResultModel();
+        $userId    = $this->currentUserId();
+        if (! $userId) {
+            return $apiResult->errorPage401Response([AppMessage::COMMON_401]);
+        }
+
+        $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
+        if (! $credential) {
+            return $apiResult->successResponse(['connected' => false]);
+        }
+
+        return $apiResult->successResponse($credential->getRespMetaApp());
+    }
+
     /** Lưu meta_app_credentials (mã hóa app_secret) + khởi tạo OAuth flow xin quyền pages_*. */
     public function connectMetaApp(array $payload = []): JsonResponse
     {

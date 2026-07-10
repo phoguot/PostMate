@@ -12,6 +12,13 @@ use Setting\Service\MetaAppService;
  */
 class MetaAppController extends AppController
 {
+    /** Trạng thái cấu hình Meta App hiện tại. */
+    public function statusAction(): JsonResponse
+    {
+        $service = $this->getContainerEntry(MetaAppService::class);
+        return $service->getMetaAppStatus($this->getPostParamsApi());
+    }
+
     /** Kết nối Meta App (appId + appSecret). */
     public function connectAction(): JsonResponse
     {
