@@ -1,8 +1,13 @@
+DirectoryIndex index.html
+
 RewriteEngine On
+
+# API requests -> PHP backend
+RewriteRule ^api(/.*)?$ index.php [L]
 
 # Static files that actually exist -> serve directly
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
 
-# Everything else (including /api/*) -> PHP
-RewriteRule ^ index.php [L]
+# Everything else -> Angular SPA fallback
+RewriteRule ^ index.html [L]

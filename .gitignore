@@ -6,3 +6,9 @@ config/development.config.php
 data/cache/*
 !data/cache/.gitkeep
 phpunit.xml
+
+# Angular build output copied from PostMate-Frontend (deployed via FTP, not tracked)
+public/*
+!public/.htaccess
+!public/index.php
+!public/web.config
