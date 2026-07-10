@@ -401,6 +401,7 @@ class FacebookAccountModel extends AppModel
     {
         return [
             'id'               => AppFormat::castIntOrNull($this->id),
+            'fbUserId'         => AppFormat::castStringOrNull($this->fbUserId),
             'displayName'      => AppFormat::castStringOrNull($this->displayName),
             'email'            => AppFormat::castStringOrNull($this->email),
             'avatarUrl'        => AppFormat::castStringOrNull($this->avatarUrl),
