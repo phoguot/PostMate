@@ -13,6 +13,7 @@ use Facebook\Model\Fanpage\FanpageModel;
 use Facebook\Service\CookieService;
 use Facebook\Service\FacebookAccountService;
 use Facebook\Service\FanpageService;
+use Facebook\Service\GraphApiClient;
 
 class Module
 {
@@ -36,6 +37,7 @@ class Module
                 FacebookAccountService::class => AppInvokableFactory::class,
                 FanpageService::class         => AppInvokableFactory::class,
                 CookieService::class          => AppInvokableFactory::class,
+                GraphApiClient::class         => AppInvokableFactory::class,
             ],
         ];
     }

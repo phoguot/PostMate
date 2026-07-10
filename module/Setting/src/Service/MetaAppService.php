@@ -11,15 +11,17 @@ use Application\Model\AppMessage;
 use Application\Model\JsonResponse;
 use Facebook\Model\Fanpage\FanpageMapper;
 use Facebook\Model\Fanpage\FanpageModel;
+use Facebook\Service\GraphApiClient;
 use Setting\Filter\MetaApp\MetaAppConnectFilter;
 use Setting\Model\MetaAppCredential\MetaAppCredentialMapper;
+use Setting\Model\MetaAppCredential\MetaAppCredentialModel;
 use User\Service\UserService;
 
 /**
  * Service Token & Quyền (Cài đặt > Facebook > Meta App), docs/Features/CaiDat mục 1.4.
  * - Quyền cần xin (App Review): pages_manage_posts, pages_read_engagement, pages_manage_engagement.
- * - issuePageTokens/refreshTokens gọi Graph API thật — chưa tích hợp SDK Graph API nên để hook,
- *   phần lưu trạng thái (page_access_token/token_expires_at/api_enabled) đã cài đặt đầy đủ.
+ * - issuePageTokens/refreshTokens gọi Graph API thật qua GraphApiClient (GET /{page-id}?fields=access_token
+ *   bằng system_user_token; hạn token đọc qua /debug_token).
  */
 class MetaAppService extends AppServiceFactory
 {
@@ -30,7 +32,41 @@ class MetaAppService extends AppServiceFactory
         return $identity ? (int)$identity : null;
     }
 
-    /** Đọc trạng thái cấu hình Meta App của user (đã nhập App ID/Secret hay chưa). */
+    /**
+     * Credential Meta App hiệu lực cho user: ưu tiên bản ghi riêng của user (meta_app_credentials),
+     * nếu chưa có thì fallback sang Meta App dùng chung khai báo ở config['meta_app']
+     * (config/autoload/local.php) — người dùng thường không cần tự nhập App ID/Secret.
+     */
+    public function resolveCredential(?int $userId): ?MetaAppCredentialModel
+    {
+        if ($userId) {
+            $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
+            if ($credential && $credential->getAppId() && $credential->getAppSecret()) {
+                return $credential;
+            }
+        }
+
+        return $this->getGlobalCredential();
+    }
+
+    /** Meta App dùng chung từ config['meta_app'] — null nếu chưa khai báo. */
+    private function getGlobalCredential(): ?MetaAppCredentialModel
+    {
+        $config = $this->getContainerEntry('config')['meta_app'] ?? [];
+        if (empty($config['appId']) || empty($config['appSecret'])) {
+            return null;
+        }
+
+        $model = new MetaAppCredentialModel();
+        $model->setAppId((string)$config['appId']);
+        $model->setAppSecret((string)$config['appSecret']);
+        if (! empty($config['systemUserToken'])) {
+            $model->setSystemUserToken((string)$config['systemUserToken']);
+        }
+        return $model;
+    }
+
+    /** Đọc trạng thái cấu hình Meta App của user (riêng, dùng chung, hoặc chưa có). */
     public function getMetaAppStatus(array $payload = []): JsonResponse
     {
         $apiResult = new ApiResultModel();
@@ -40,11 +76,20 @@ class MetaAppService extends AppServiceFactory
         }
 
         $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
-        if (! $credential) {
-            return $apiResult->successResponse(['connected' => false]);
+        if ($credential && $credential->getAppId()) {
+            return $apiResult->successResponse($credential->getRespMetaApp() + ['global' => false]);
         }
 
-        return $apiResult->successResponse($credential->getRespMetaApp());
+        $global = $this->getGlobalCredential();
+        if ($global) {
+            return $apiResult->successResponse([
+                'appId'     => $global->getAppId(),
+                'connected' => true,
+                'global'    => true,
+            ]);
+        }
+
+        return $apiResult->successResponse(['connected' => false, 'global' => false]);
     }
 
     /** Lưu meta_app_credentials (mã hóa app_secret) + khởi tạo OAuth flow xin quyền pages_*. */
@@ -94,7 +139,7 @@ class MetaAppService extends AppServiceFactory
             return $apiResult->errorPage401Response([AppMessage::COMMON_401]);
         }
 
-        $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
+        $credential = $this->resolveCredential($userId);
         if (! $credential || ! $credential->getSystemUserToken()) {
             return $apiResult->errorResponse(['Chưa kết nối Meta App hoặc thiếu system user token']);
         }
@@ -105,10 +150,12 @@ class MetaAppService extends AppServiceFactory
         $search = $fanpageMapper->searchFanpage($model, 1, 500);
 
         $issued = 0;
+        $errors = [];
         foreach ($search['items'] as $fanpage) {
             /** @var FanpageModel $fanpage */
-            $token = $this->performIssueToken($fanpage, $credential->getSystemUserToken());
-            if (! $token) {
+            $token = $this->performIssueToken($fanpage, $credential);
+            if (isset($token['error'])) {
+                $errors[] = ($fanpage->getName() ?: $fanpage->getFbPageId()) . ': ' . $token['error'];
                 continue;
             }
             $fanpageMapper->updateAttrs($fanpage, [
@@ -119,16 +166,65 @@ class MetaAppService extends AppServiceFactory
             $issued++;
         }
 
-        return $apiResult->successResponse(['issued' => $issued, 'total' => count($search['items'])]);
+        return $apiResult->successResponse([
+            'issued' => $issued,
+            'total'  => count($search['items']),
+            'errors' => $errors,
+        ]);
     }
 
     /**
-     * Hook: gọi Graph API cấp Page Access Token cho 1 fanpage bằng system_user_token.
-     * Chưa tích hợp Graph API SDK thật.
+     * Gọi Graph API cấp Page Access Token cho 1 fanpage bằng system_user_token:
+     * GET /{page-id}?fields=access_token — system user phải được gán vào page trên
+     * Meta Business Suite thì mới đọc được field này.
+     * @return array{accessToken: string, expiresAt: ?string}|array{error: string}
      */
-    private function performIssueToken(FanpageModel $fanpage, string $systemUserToken): ?array
+    private function performIssueToken(FanpageModel $fanpage, MetaAppCredentialModel $credential): array
     {
-        return null;
+        if (! $fanpage->getFbPageId()) {
+            return ['error' => 'Fanpage chưa có Page ID'];
+        }
+
+        $client = $this->getContainerEntry(GraphApiClient::class);
+        $resp   = $client->get($fanpage->getFbPageId(), [
+            'fields'       => 'access_token',
+            'access_token' => $credential->getSystemUserToken(),
+        ]);
+        if (isset($resp['error'])) {
+            return ['error' => (string)($resp['error']['message'] ?? 'Lỗi Graph API không xác định')];
+        }
+        if (empty($resp['access_token'])) {
+            return ['error' => 'Graph API không trả về access_token (system user chưa được gán vào page?)'];
+        }
+
+        return [
+            'accessToken' => (string)$resp['access_token'],
+            'expiresAt'   => $this->fetchTokenExpiry((string)$resp['access_token'], $credential),
+        ];
+    }
+
+    /**
+     * Đọc hạn token qua GET /debug_token bằng app access token (appId|appSecret).
+     * Token do system user cấp thường không hết hạn (expires_at = 0) → trả null.
+     * Lỗi ở bước này không chặn việc lưu token — chỉ mất thông tin hạn.
+     */
+    private function fetchTokenExpiry(string $pageToken, MetaAppCredentialModel $credential): ?string
+    {
+        if (! $credential->getAppId() || ! $credential->getAppSecret()) {
+            return null;
+        }
+
+        $client = $this->getContainerEntry(GraphApiClient::class);
+        $resp   = $client->get('debug_token', [
+            'input_token'  => $pageToken,
+            'access_token' => $credential->getAppId() . '|' . $credential->getAppSecret(),
+        ]);
+
+        $expiresAt = $resp['data']['expires_at'] ?? null;
+        if (! is_numeric($expiresAt) || (int)$expiresAt <= 0) {
+            return null;
+        }
+        return date('Y-m-d H:i:s', (int)$expiresAt);
     }
 
     /** Làm mới token — ủy quyền TokenService::refreshPageTokenCron() (xem Fanpage/HAM_XU_LY.md). */

@@ -9,11 +9,12 @@ use Laminas\Router\Http\Segment;
 return [
     'router' => [
         'routes' => [
-            // setting_meta_app khai báo TRƯỚC setting: route '/setting[/:action]' cũng khớp
-            // '/setting/meta-app' (coi meta-app là :action) nếu được thử trước — Laminas
-            // TreeRouteStack thử các route theo thứ tự khai báo, nên route cụ thể hơn phải đứng trước.
+            // Laminas TreeRouteStack duyệt route theo LIFO (khai báo SAU thử TRƯỚC), nên
+            // '/api/setting[/:action]' sẽ nuốt '/api/setting/meta-app' (coi meta-app là :action).
+            // Đặt priority cao để route cụ thể hơn luôn được thử trước, bất kể thứ tự khai báo.
             'setting_meta_app' => [
-                'type'    => Segment::class,
+                'type'     => Segment::class,
+                'priority' => 10,
                 'options' => [
                     'route'       => '/api/setting/meta-app[/:action]',
                     'constraints' => [

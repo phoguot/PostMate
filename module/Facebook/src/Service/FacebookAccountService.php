@@ -23,7 +23,7 @@ use Facebook\Model\Fanpage\FanpageMapper;
 use Facebook\Model\Fanpage\FanpageModel;
 use Laminas\Http\Response;
 use Laminas\Session\Container as SessionContainer;
-use Setting\Model\MetaAppCredential\MetaAppCredentialMapper;
+use Setting\Service\MetaAppService;
 use User\Service\UserService;
 
 /**
@@ -192,8 +192,8 @@ class FacebookAccountService extends AppServiceFactory
             return $apiResult->errorPage401Response([AppMessage::COMMON_401]);
         }
 
-        $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
-        if (! $credential || ! $credential->getAppId() || ! $credential->getAppSecret()) {
+        $credential = $this->getContainerEntry(MetaAppService::class)->resolveCredential($userId);
+        if (! $credential) {
             return $apiResult->errorResponse([
                 'Chưa cấu hình Meta App (App ID/App Secret) — vào Cài đặt > Facebook > Token & Quyền để kết nối trước',
             ]);
@@ -246,8 +246,8 @@ class FacebookAccountService extends AppServiceFactory
         }
         $session->offsetUnset('state');
 
-        $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
-        if (! $credential || ! $credential->getAppId() || ! $credential->getAppSecret()) {
+        $credential = $this->getContainerEntry(MetaAppService::class)->resolveCredential($userId);
+        if (! $credential) {
             return $this->redirectToFrontend(['fbConnect' => 'error', 'message' => 'Chưa cấu hình Meta App']);
         }
 
