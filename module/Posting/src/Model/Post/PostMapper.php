@@ -6,6 +6,7 @@ namespace Posting\Model\Post;
 
 use Application\Model\AppMapper;
 use Application\Model\DateModel;
+use Facebook\Model\FacebookAccount\FacebookAccountMapper;
 use Facebook\Model\Fanpage\FanpageMapper;
 use Infra\Model\BrowserProfile\BrowserProfileMapper;
 use Laminas\Db\Sql\Expression;
@@ -48,8 +49,14 @@ class PostMapper extends AppMapper
         } else {
             $select->where(['p.status != ?' => PostConst::STATUS_DELETED]);
         }
+        if ($item->getTargetType()) {
+            $select->where(['p.targetType' => $item->getTargetType()]);
+        }
         if ($item->getFanpageId()) {
             $select->where(['p.fanpageId' => $item->getFanpageId()]);
+        }
+        if ($item->getFacebookAccountId()) {
+            $select->where(['p.facebookAccountId' => $item->getFacebookAccountId()]);
         }
         if ($item->getBrowserProfileId()) {
             $select->where(['p.browserProfileId' => $item->getBrowserProfileId()]);
@@ -178,21 +185,29 @@ class PostMapper extends AppMapper
         }
 
         $fanpageIds = [];
+        $accountIds = [];
         $profileIds = [];
         foreach ($items as $p) {
             /** @var PostModel $p */
             if ($p->getFanpageId()) {
                 $fanpageIds[] = $p->getFanpageId();
             }
+            if ($p->getFacebookAccountId()) {
+                $accountIds[] = $p->getFacebookAccountId();
+            }
             if ($p->getBrowserProfileId()) {
                 $profileIds[] = $p->getBrowserProfileId();
             }
         }
         $fanpageNameMap = [];
+        $accountInfoMap = [];
         $profileInfoMap = [];
 
         if ($fanpageIds) {
             $fanpageNameMap = $this->getContainerEntry(FanpageMapper::class)->getNameMapByIds($fanpageIds);
+        }
+        if ($accountIds) {
+            $accountInfoMap = $this->getContainerEntry(FacebookAccountMapper::class)->getInfoMapByIds($accountIds);
         }
         if ($profileIds) {
             $profileInfoMap = $this->getContainerEntry(BrowserProfileMapper::class)->getInfoMapByIds($profileIds);
@@ -205,6 +220,9 @@ class PostMapper extends AppMapper
             }
             if ($row->getFanpageId() && isset($fanpageNameMap[$row->getFanpageId()])) {
                 $row->setFanpageName($fanpageNameMap[$row->getFanpageId()]);
+            }
+            if ($row->getFacebookAccountId() && isset($accountInfoMap[$row->getFacebookAccountId()])) {
+                $row->setFacebookAccountName($accountInfoMap[$row->getFacebookAccountId()]['displayName'] ?? null);
             }
             if ($row->getBrowserProfileId() && isset($profileInfoMap[$row->getBrowserProfileId()])) {
                 $row->setBrowserProfileName($profileInfoMap[$row->getBrowserProfileId()]['name'] ?? null);
@@ -265,7 +283,9 @@ class PostMapper extends AppMapper
             'title'            => $item->getTitle(),
             'content'          => $item->getContent(),
             'contentType'      => $item->getContentType() ?? PostConst::CONTENT_TYPE_TEXT,
+            'targetType'       => $item->getTargetType() ?? PostConst::TARGET_FANPAGE,
             'fanpageId'        => $item->getFanpageId(),
+            'facebookAccountId' => $item->getFacebookAccountId(),
             'browserProfileId' => $item->getBrowserProfileId(),
             'aiAgentId'        => $item->getAiAgentId(),
             'status'           => $item->getStatus() ?? PostConst::STATUS_DRAFT,
@@ -340,6 +360,45 @@ class PostMapper extends AppMapper
         }
         $dbAdapter->query($dbSql->buildSqlString($update), $dbAdapter::QUERY_MODE_EXECUTE);
         return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Worker (không scope user — chạy dưới tiến trình hệ thống)
+
+    /**
+     * Claim nguyên tử một bài để đăng: flip scheduled → processing.
+     * Trả true nếu chính worker này giữ được bài (đổi đúng 1 dòng), false nếu bài
+     * đã bị worker khác giữ hoặc không còn ở trạng thái scheduled.
+     */
+    public function claimForProcessing(int $postId): bool
+    {
+        $dbSql     = $this->getDbSql();
+        $dbAdapter = $this->getDbAdapter();
+
+        $update = $dbSql->update(PostMapper::TABLE_NAME);
+        $update->set(['status' => PostConst::STATUS_PROCESSING, 'modifiedAt' => DateModel::getTimeStampsCurrent()]);
+        $update->where(['id' => $postId, 'status' => PostConst::STATUS_SCHEDULED]);
+        $result = $dbAdapter->query($dbSql->buildSqlString($update), $dbAdapter::QUERY_MODE_EXECUTE);
+        return $result->getAffectedRows() === 1;
+    }
+
+    /** Các bài scheduled quá hạn (scheduledAt < $deadline) — dùng cho expireStaleJobs. */
+    public function findStaleScheduled(string $deadline): array
+    {
+        $dbSql     = $this->getDbSql();
+        $dbAdapter = $this->getDbAdapter();
+
+        $select = $dbSql->select(['p' => PostMapper::TABLE_NAME]);
+        $select->where(['p.status' => PostConst::STATUS_SCHEDULED]);
+        $select->where(['p.scheduledAt < ?' => $deadline]);
+        $select->limit(200);
+
+        $rows = $dbAdapter->query($dbSql->buildSqlString($select), $dbAdapter::QUERY_MODE_EXECUTE);
+        $items = [];
+        foreach ($rows->toArray() as $row) {
+            $items[] = $this->hydrateModel($row);
+        }
+        return $items;
     }
 
     // -------------------------------------------------------------------------

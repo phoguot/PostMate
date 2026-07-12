@@ -7,8 +7,11 @@ use Application\Model\ApiResultModel;
 use Application\Model\AppMessage;
 use Application\Model\DateModel;
 use Application\Model\JsonResponse;
+use Facebook\Model\FacebookAccount\FacebookAccountMapper;
+use Facebook\Model\FacebookAccount\FacebookAccountModel;
 use Facebook\Model\Fanpage\FanpageMapper;
 use Facebook\Model\Fanpage\FanpageModel;
+use Facebook\Service\FacebookAccountService;
 use Facebook\Service\FanpageService;
 use Posting\Filter\Post\PostDeleteFilter;
 use Posting\Filter\Post\PostDuplicateFilter;
@@ -68,7 +71,9 @@ class PostService extends AppServiceFactory
         $model->setId(! empty($formData['id']) ? (int)$formData['id'] : null);
         $model->setStatus(isset($formData['status']) && $formData['status'] !== '' ? (int)$formData['status'] : null);
         $model->setStatuses($formData['statuses'] ?? []);
+        $model->setTargetType(! empty($formData['targetType']) ? (int)$formData['targetType'] : null);
         $model->setFanpageId(! empty($formData['fanpageId']) ? (int)$formData['fanpageId'] : null);
+        $model->setFacebookAccountId(! empty($formData['facebookAccountId']) ? (int)$formData['facebookAccountId'] : null);
         $model->setBrowserProfileId(! empty($formData['browserProfileId']) ? (int)$formData['browserProfileId'] : null);
         $model->setChannel(! empty($formData['channel']) ? (int)$formData['channel'] : null);
         $model->setFromDate($formData['fromDate'] ?? null);
@@ -230,9 +235,10 @@ class PostService extends AppServiceFactory
             }
         }
 
-        $fanpageIds = $formData['fanpageIds'] ?? [];
-        if (empty($fanpageIds) && ! empty($formData['fanpageId'])) {
-            $fanpageIds = [(int)$formData['fanpageId']];
+        $targetTypeProvided = ! empty($formData['targetType']);
+        $targetType = $targetTypeProvided ? (int)$formData['targetType'] : PostConst::TARGET_FANPAGE;
+        if (! in_array($targetType, PostConst::getAllowedTargetTypes(), true)) {
+            return $apiResult->errorInvalidFormResponse(['targetType' => AppMessage::INVALID_DATA]);
         }
 
         $mapper = $this->getContainerEntry(PostMapper::class);
@@ -245,32 +251,43 @@ class PostService extends AppServiceFactory
             if (! $mapper->getPost($existing)) {
                 return $apiResult->errorData404Response([AppMessage::NO_DATA]);
             }
-            $fanpageId = ! empty($fanpageIds) ? (int)$fanpageIds[0] : $existing->getFanpageId();
-            $saved = $this->buildAndSavePost($mapper, $formData, $userId, $status, $contentType, $scheduledAt, $fanpageId, $media, $id);
+            // FE không gửi lại targetType khi sửa → giữ nguyên đích của bài hiện có (tránh mất facebookAccountId/fanpageId).
+            if (! $targetTypeProvided) {
+                $targetType = $existing->getTargetType() ?? PostConst::TARGET_FANPAGE;
+            }
+            $targetIds = $this->resolveTargetIds($targetType, $formData);
+            $targetId  = ! empty($targetIds)
+                ? (int)$targetIds[0]
+                : ($targetType === PostConst::TARGET_PROFILE ? $existing->getFacebookAccountId() : $existing->getFanpageId());
+            $saved = $this->buildAndSavePost($mapper, $formData, $userId, $status, $contentType, $scheduledAt, $targetType, $targetId, $media, $id);
             return $apiResult->successResponse(['ids' => [$saved->getId()]], [AppMessage::UPDATE_SUCCESSFULLY]);
         }
 
-        // Tạo mới: mỗi fanpage một bài
-        if (empty($fanpageIds)) {
+        // Danh sách đích đăng: fanpage (fanpageIds/fanpageId) hoặc trang cá nhân (facebookAccountIds/facebookAccountId).
+        $targetIds = $this->resolveTargetIds($targetType, $formData);
+
+        // Tạo mới: mỗi đích một bài
+        if (empty($targetIds)) {
             if ($status === PostConst::STATUS_SCHEDULED) {
-                return $apiResult->errorInvalidFormResponse(['fanpageIds' => AppMessage::VALIDATOR_REQUIRED]);
+                $field = $targetType === PostConst::TARGET_PROFILE ? 'facebookAccountIds' : 'fanpageIds';
+                return $apiResult->errorInvalidFormResponse([$field => AppMessage::VALIDATOR_REQUIRED]);
             }
-            $fanpageIds = [null];
+            $targetIds = [null];
         }
 
         $savedIds = [];
-        foreach ($fanpageIds as $fanpageId) {
-            $fanpageId = $fanpageId !== null ? (int)$fanpageId : null;
-            $channel   = $this->resolveChannel($fanpageId, $formData);
+        foreach ($targetIds as $targetId) {
+            $targetId = $targetId !== null ? (int)$targetId : null;
+            $channel  = $this->resolveChannel($targetType, $targetId, $formData);
 
-            if ($status === PostConst::STATUS_SCHEDULED && $fanpageId) {
-                $check = $this->validatePostability($userId, $fanpageId, $formData);
+            if ($status === PostConst::STATUS_SCHEDULED && $targetId) {
+                $check = $this->validatePostability($userId, $targetType, $targetId, $formData);
                 if (! $check['canPost']) {
-                    continue; // fail page nào bỏ page đó, tiếp tục page khác
+                    continue; // đích nào lỗi thì bỏ, tiếp tục đích khác
                 }
             }
 
-            $saved = $this->buildAndSavePost($mapper, $formData, $userId, $status, $contentType, $scheduledAt, $fanpageId, $media, null, $channel);
+            $saved = $this->buildAndSavePost($mapper, $formData, $userId, $status, $contentType, $scheduledAt, $targetType, $targetId, $media, null, $channel);
             $savedIds[] = $saved->getId();
 
             if ($status === PostConst::STATUS_SCHEDULED) {
@@ -285,6 +302,28 @@ class PostService extends AppServiceFactory
         return $apiResult->successResponse(['ids' => $savedIds], [AppMessage::ADD_SUCCESSFULLY]);
     }
 
+    /**
+     * Chuẩn hóa danh sách id đích đăng theo targetType:
+     * - TARGET_PROFILE → facebookAccountIds (fallback facebookAccountId)
+     * - TARGET_FANPAGE → fanpageIds (fallback fanpageId)
+     */
+    private function resolveTargetIds(int $targetType, array $formData): array
+    {
+        if ($targetType === PostConst::TARGET_PROFILE) {
+            $ids = $formData['facebookAccountIds'] ?? [];
+            if (empty($ids) && ! empty($formData['facebookAccountId'])) {
+                $ids = [(int)$formData['facebookAccountId']];
+            }
+            return $ids;
+        }
+
+        $ids = $formData['fanpageIds'] ?? [];
+        if (empty($ids) && ! empty($formData['fanpageId'])) {
+            $ids = [(int)$formData['fanpageId']];
+        }
+        return $ids;
+    }
+
     private function buildAndSavePost(
         PostMapper $mapper,
         array $formData,
@@ -292,7 +331,8 @@ class PostService extends AppServiceFactory
         int $status,
         int $contentType,
         ?string $scheduledAt,
-        ?int $fanpageId,
+        int $targetType,
+        ?int $targetId,
         array $media,
         ?int $id = null,
         ?int $channel = null
@@ -304,7 +344,14 @@ class PostService extends AppServiceFactory
         $model->setCreatedById($userId);
         $model->setStatus($status);
         $model->setContentType($contentType);
-        $model->setFanpageId($fanpageId);
+        $model->setTargetType($targetType);
+        if ($targetType === PostConst::TARGET_PROFILE) {
+            $model->setFacebookAccountId($targetId);
+            $model->setFanpageId(null);
+        } else {
+            $model->setFanpageId($targetId);
+            $model->setFacebookAccountId(null);
+        }
         $model->setScheduledAt($scheduledAt);
         if ($channel !== null) {
             $model->setChannel($channel);
@@ -354,7 +401,9 @@ class PostService extends AppServiceFactory
         $clone->setTitle($source->getTitle());
         $clone->setContent($source->getContent());
         $clone->setContentType($source->getContentType());
+        $clone->setTargetType($source->getTargetType() ?? PostConst::TARGET_FANPAGE);
         $clone->setFanpageId($source->getFanpageId());
+        $clone->setFacebookAccountId($source->getFacebookAccountId());
         $clone->setBrowserProfileId($source->getBrowserProfileId());
         $clone->setChannel($source->getChannel());
         $clone->setNote($source->getNote());
@@ -514,14 +563,18 @@ class PostService extends AppServiceFactory
      * Xác định kênh đăng theo fanpage.apiEnabled (API-first, xem Fanpage/NGHIEP_VU.md mục 1.3).
      * Cho phép ghi đè thủ công qua formData['channel'] nếu người dùng chọn tay.
      */
-    private function resolveChannel(?int $fanpageId, array $formData): int
+    private function resolveChannel(int $targetType, ?int $targetId, array $formData): int
     {
         if (! empty($formData['channel'])) {
             return (int)$formData['channel'];
         }
-        if ($fanpageId) {
+        // Trang cá nhân: Graph API không cho publish lên timeline → luôn dùng browser automation.
+        if ($targetType === PostConst::TARGET_PROFILE) {
+            return PostConst::CHANNEL_BROWSER;
+        }
+        if ($targetId) {
             $fanpage = new FanpageModel();
-            $fanpage->setId($fanpageId);
+            $fanpage->setId($targetId);
             if ($this->getContainerEntry(FanpageMapper::class)->getFanpage($fanpage) && $fanpage->getApiEnabled()) {
                 return PostConst::CHANNEL_GRAPH_API;
             }
@@ -534,10 +587,20 @@ class PostService extends AppServiceFactory
      * Kiểm tra khả năng đăng của fanpage trước khi lên lịch — ủy quyền FanpageService::computeCanPost()
      * (Fanpage/HAM_XU_LY.md).
      */
-    private function validatePostability(int $userId, int $fanpageId, array $formData): array
+    private function validatePostability(int $userId, int $targetType, int $targetId, array $formData): array
     {
+        if ($targetType === PostConst::TARGET_PROFILE) {
+            $account = new FacebookAccountModel();
+            $account->setId($targetId);
+            $account->setUserId($userId);
+            if (! $this->getContainerEntry(FacebookAccountMapper::class)->getFacebookAccount($account)) {
+                return ['canPost' => false, 'reason' => AppMessage::NO_DATA];
+            }
+            return $this->getContainerEntry(FacebookAccountService::class)->computeCanPost($account);
+        }
+
         $fanpage = new FanpageModel();
-        $fanpage->setId($fanpageId);
+        $fanpage->setId($targetId);
         $fanpage->setUserId($userId);
         if (! $this->getContainerEntry(FanpageMapper::class)->getFanpage($fanpage)) {
             return ['canPost' => false, 'reason' => AppMessage::NO_DATA];
@@ -545,13 +608,21 @@ class PostService extends AppServiceFactory
         return $this->getContainerEntry(FanpageService::class)->computeCanPost($fanpage);
     }
 
-    /** Hook: đẩy job vào hàng đợi (QueueService — module LichDang). */
+    /** Đẩy job vào hàng đợi để worker đăng theo lịch. */
     private function enqueueJob(PostModel $post, ?string $runAt): void
     {
+        if (! $post->getId() || ! $runAt) {
+            return;
+        }
+        $this->getContainerEntry(QueueService::class)->enqueueJob((int)$post->getId(), $runAt);
     }
 
-    /** Hook: hủy job khỏi hàng đợi (QueueService — module LichDang). */
+    /** Hủy job khỏi hàng đợi (khi xóa bài / sửa lịch). */
     private function cancelJob(PostModel $post): void
     {
+        if (! $post->getId()) {
+            return;
+        }
+        $this->getContainerEntry(QueueService::class)->cancelJob((int)$post->getId());
     }
 }

@@ -5,6 +5,8 @@ vendor/
 config/development.config.php
 data/cache/*
 !data/cache/.gitkeep
+data/*.log
+data/php-error.log
 phpunit.xml
 
 # Angular build output copied from PostMate-Frontend (deployed via FTP, not tracked)

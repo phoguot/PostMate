@@ -22,6 +22,10 @@ class PostConst extends AppConstModel
     public const STATUS_EXPIRED = 6;    // Quá hạn lịch mà chưa chạy được
     public const STATUS_DELETED = 7;    // Đã xóa (soft-delete)
 
+    // --- target_type (posts.target_type): đích đăng của bài viết ---
+    public const TARGET_FANPAGE = 1; // đăng lên fanpage (facebook Page)
+    public const TARGET_PROFILE = 2; // đăng lên trang cá nhân (facebook_account/timeline)
+
     // --- content_type (posts.content_type) ---
     public const CONTENT_TYPE_TEXT = 1;
     public const CONTENT_TYPE_IMAGE = 2;
@@ -87,6 +91,14 @@ class PostConst extends AppConstModel
             PostConst::CONTENT_TYPE_VIDEO,
             PostConst::CONTENT_TYPE_LINK,
             PostConst::CONTENT_TYPE_POLL,
+        ];
+    }
+
+    public static function getAllowedTargetTypes(): array
+    {
+        return [
+            PostConst::TARGET_FANPAGE,
+            PostConst::TARGET_PROFILE,
         ];
     }
 

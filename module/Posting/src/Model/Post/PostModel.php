@@ -18,7 +18,9 @@ class PostModel extends AppModel
     protected ?string $title = null;
     protected ?string $content = null;
     protected ?int $contentType = null;
+    protected ?int $targetType = null;
     protected ?int $fanpageId = null;
+    protected ?int $facebookAccountId = null;
     protected ?int $browserProfileId = null;
     protected ?int $aiAgentId = null;
     protected ?int $status = null;
@@ -37,6 +39,7 @@ class PostModel extends AppModel
 
     // --- Runtime / display fields (không lưu DB) ---
     protected ?string $fanpageName = null;
+    protected ?string $facebookAccountName = null;
     protected ?string $browserProfileName = null;
 
     // --- Search helpers (không lưu DB) ---
@@ -94,6 +97,17 @@ class PostModel extends AppModel
         return $this;
     }
 
+    public function getTargetType(): ?int
+    {
+        return $this->targetType;
+    }
+
+    public function setTargetType(?int $targetType): self
+    {
+        $this->targetType = $targetType;
+        return $this;
+    }
+
     public function getFanpageId(): ?int
     {
         return $this->fanpageId;
@@ -102,6 +116,17 @@ class PostModel extends AppModel
     public function setFanpageId(?int $fanpageId): self
     {
         $this->fanpageId = $fanpageId;
+        return $this;
+    }
+
+    public function getFacebookAccountId(): ?int
+    {
+        return $this->facebookAccountId;
+    }
+
+    public function setFacebookAccountId(?int $facebookAccountId): self
+    {
+        $this->facebookAccountId = $facebookAccountId;
         return $this;
     }
 
@@ -282,6 +307,17 @@ class PostModel extends AppModel
         return $this;
     }
 
+    public function getFacebookAccountName(): ?string
+    {
+        return $this->facebookAccountName;
+    }
+
+    public function setFacebookAccountName(?string $facebookAccountName): self
+    {
+        $this->facebookAccountName = $facebookAccountName;
+        return $this;
+    }
+
     public function getBrowserProfileName(): ?string
     {
         return $this->browserProfileName;
@@ -401,9 +437,14 @@ class PostModel extends AppModel
             'title'              => AppFormat::castStringOrNull($this->title),
             'content'            => AppFormat::castStringOrNull($this->content),
             'contentType'        => AppFormat::castIntOrNull($this->contentType),
+            'targetType'         => AppFormat::castIntOrNull($this->targetType) ?? PostConst::TARGET_FANPAGE,
             'fanpage'            => $this->fanpageId ? [
                 'id'   => AppFormat::castIntOrNull($this->fanpageId),
                 'name' => AppFormat::castStringOrNull($this->fanpageName),
+            ] : null,
+            'facebookAccount'    => $this->facebookAccountId ? [
+                'id'   => AppFormat::castIntOrNull($this->facebookAccountId),
+                'name' => AppFormat::castStringOrNull($this->facebookAccountName),
             ] : null,
             'browserProfile'     => $this->browserProfileId ? [
                 'id'   => AppFormat::castIntOrNull($this->browserProfileId),

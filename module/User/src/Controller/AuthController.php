@@ -58,6 +58,9 @@ class AuthController extends AppController
      */
     public function meAction(): JsonResponse
     {
+        error_reporting(E_ALL);
+        ini_set('display_errors', 1);
+        ini_set('display_startup_errors', 1);
         $apiResult = new ApiResultModel();
         /** @var UserService $userService */
         $userService = $this->getContainerEntry(UserService::class);

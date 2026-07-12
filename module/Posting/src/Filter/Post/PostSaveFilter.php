@@ -17,12 +17,13 @@ use Posting\Model\Post\PostConst;
 class PostSaveFilter extends AuthScopedFilter
 {
     private bool $isValidFanpageIds = true;
+    private bool $isValidFacebookAccountIds = true;
 
     public function __construct($container, $options = [])
     {
         parent::__construct($container, $options);
 
-        $intFields = ['id', 'fanpageId', 'browserProfileId', 'aiAgentId', 'contentType', 'status', 'channel', 'maxAttempts'];
+        $intFields = ['id', 'targetType', 'fanpageId', 'facebookAccountId', 'browserProfileId', 'aiAgentId', 'contentType', 'status', 'channel', 'maxAttempts'];
         foreach ($intFields as $fieldName) {
             $this->add(CommonFieldFilters::intField($fieldName));
         }
@@ -47,6 +48,7 @@ class PostSaveFilter extends AuthScopedFilter
         $this->add($this->richTextField('content'));
         $this->add(CommonFieldFilters::objectArrayField('media'));
         $this->add(CommonFieldFilters::intArrayField('fanpageIds'));
+        $this->add(CommonFieldFilters::intArrayField('facebookAccountIds'));
 
         $this->createCommonInputFilterDateTime('scheduledAt');
     }
@@ -64,9 +66,16 @@ class PostSaveFilter extends AuthScopedFilter
         );
         $this->isValidFanpageIds = $isValidFanpageIds;
 
+        [$facebookAccountIds, $isValidAccountIds] = $this->normalizeIntArray(
+            $data['facebookAccountIds'] ?? $data['facebookAccounts'] ?? null
+        );
+        $this->isValidFacebookAccountIds = $isValidAccountIds;
+
         return parent::setData([
             'id'                  => $data['id'] ?? null,
+            'targetType'          => $data['targetType'] ?? null,
             'fanpageId'           => $data['fanpageId'] ?? null,
+            'facebookAccountId'   => $data['facebookAccountId'] ?? null,
             'browserProfileId'    => $data['browserProfileId'] ?? $advanced['browserProfileId'] ?? null,
             'aiAgentId'           => $data['aiAgentId'] ?? null,
             'contentType'         => $data['contentType'] ?? $content['type'] ?? null,
@@ -82,6 +91,7 @@ class PostSaveFilter extends AuthScopedFilter
             'autoShare'           => $this->toBoolInt($data['autoShare'] ?? $optionsIn['autoShare'] ?? null),
             'media'               => $data['media'] ?? $content['media'] ?? $content['images'] ?? [],
             'fanpageIds'          => $fanpageIds,
+            'facebookAccountIds'  => $facebookAccountIds,
             'scheduledAt'         => $data['scheduledAt'] ?? $schedule['scheduledAt'] ?? '',
         ]);
     }
@@ -94,6 +104,10 @@ class PostSaveFilter extends AuthScopedFilter
         }
         if (!$this->isValidFanpageIds) {
             $this->setError('fanpageIds', AppMessage::INVALID_DATA);
+            return false;
+        }
+        if (!$this->isValidFacebookAccountIds) {
+            $this->setError('facebookAccountIds', AppMessage::INVALID_DATA);
             return false;
         }
         return true;

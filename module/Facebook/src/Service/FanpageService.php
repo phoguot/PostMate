@@ -150,7 +150,11 @@ class FanpageService extends AppServiceFactory
 
         if ($fanpage->getApiEnabled()) {
             $tokenExpiresAt = $fanpage->getTokenExpiresAt();
-            $tokenValid = $fanpage->getPageAccessToken() && $tokenExpiresAt && strtotime($tokenExpiresAt) > time();
+            // Page access token sinh từ long-lived user token thường KHÔNG có hạn (tokenExpiresAt = null):
+            // coi là còn hạn khi có token và (chưa set hạn HOẶC hạn còn ở tương lai);
+            // chỉ báo hết hạn khi có mốc hạn và mốc đó đã qua.
+            $tokenValid = $fanpage->getPageAccessToken()
+                && (! $tokenExpiresAt || strtotime($tokenExpiresAt) > time());
             return $tokenValid
                 ? ['canPost' => true, 'reason' => null]
                 : ['canPost' => false, 'reason' => 'Token hết hạn'];

@@ -21,6 +21,8 @@ use Facebook\Model\FacebookAccount\FacebookAccountModel;
 use Facebook\Model\Fanpage\FanpageConst;
 use Facebook\Model\Fanpage\FanpageMapper;
 use Facebook\Model\Fanpage\FanpageModel;
+use Infra\Model\BrowserProfile\BrowserProfileConst;
+use Infra\Model\BrowserProfile\BrowserProfileMapper;
 use Laminas\Http\Response;
 use Laminas\Session\Container as SessionContainer;
 use Setting\Service\MetaAppService;
@@ -406,6 +408,40 @@ class FacebookAccountService extends AppServiceFactory
         }
         $data = json_decode($body, true);
         return is_array($data) ? $data : null;
+    }
+
+    // =========================================================================
+    // computeCanPost — dùng khi đăng lên trang cá nhân (Posting::validatePostability)
+
+    /**
+     * Khả năng đăng bài lên trang cá nhân (đăng qua browser automation):
+     * - status != active            → false, "Tài khoản không hoạt động"
+     * - capability canPost = false  → false, "Tài khoản không được phép đăng"
+     * - chưa gắn trình duyệt        → false, "Chưa gắn trình duyệt"
+     * - cookie valid && profile != offline ? true : false, "Cookie/profile lỗi"
+     */
+    public function computeCanPost(FacebookAccountModel $account): array
+    {
+        if ((int)$account->getStatus() !== FacebookAccountConst::STATUS_ACTIVE) {
+            return ['canPost' => false, 'reason' => 'Tài khoản không hoạt động'];
+        }
+        if (! $account->getCanPost()) {
+            return ['canPost' => false, 'reason' => 'Tài khoản không được phép đăng'];
+        }
+        if (! $account->getBrowserProfileId()) {
+            return ['canPost' => false, 'reason' => 'Chưa gắn trình duyệt'];
+        }
+
+        $latestCookie = $this->getContainerEntry(CookieMapper::class)->getLatestByAccountIds([$account->getId()]);
+        $cookieStatus = $latestCookie[$account->getId()]['status'] ?? null;
+
+        $profileInfo   = $this->getContainerEntry(BrowserProfileMapper::class)->getInfoMapByIds([$account->getBrowserProfileId()]);
+        $profileStatus = $profileInfo[$account->getBrowserProfileId()]['status'] ?? null;
+
+        $ok = $cookieStatus === CookieConst::STATUS_VALID && $profileStatus !== BrowserProfileConst::STATUS_OFFLINE;
+        return $ok
+            ? ['canPost' => true, 'reason' => null]
+            : ['canPost' => false, 'reason' => 'Cookie/profile lỗi'];
     }
 
     // =========================================================================

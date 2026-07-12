@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Application;
 
+use Application\Model\Log\ErrorLogger;
 use Laminas\EventManager\EventInterface;
 use Laminas\Http\Request as HttpRequest;
 use Laminas\Http\Response as HttpResponse;
@@ -29,6 +30,35 @@ class Module implements BootstrapListenerInterface
         $eventManager->attach(MvcEvent::EVENT_ROUTE, [$this, 'onRoute'], 1000);
         // Gắn header CORS vào mọi response (kể cả lỗi/exception).
         $eventManager->attach(MvcEvent::EVENT_FINISH, [$this, 'onFinish'], -1000);
+        // Ghi log mọi exception uncaught (Laminas nuốt vào trang lỗi, PHP error_log không thấy).
+        $eventManager->attach(MvcEvent::EVENT_DISPATCH_ERROR, [$this, 'onError'], 100);
+        $eventManager->attach(MvcEvent::EVENT_RENDER_ERROR, [$this, 'onError'], 100);
+    }
+
+    /**
+     * Log lỗi dispatch/render ra file. Không đổi response — chỉ ghi lại để soi.
+     */
+    public function onError(MvcEvent $e): void
+    {
+        $exception = $e->getParam('exception');
+        if ($exception instanceof \Throwable) {
+            ErrorLogger::logException($exception, [
+                'controller' => $e->getParam('controller'),
+                'action'     => $e->getParam('action'),
+                'errorType'  => $e->getError(),
+            ]);
+            return;
+        }
+
+        // Lỗi không có exception (vd: route/controller không tồn tại).
+        $error = $e->getError();
+        if ($error) {
+            ErrorLogger::write('error', 'mvc_error', [
+                'errorType'  => $error,
+                'controller' => $e->getParam('controller'),
+                'reason'     => $e->getParam('reason'),
+            ]);
+        }
     }
 
     public function onRoute(MvcEvent $e): void

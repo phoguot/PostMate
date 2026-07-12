@@ -16,7 +16,7 @@ class PostListFilter extends AuthScopedFilter
     {
         parent::__construct($container, $options);
 
-        $intFields = ['id', 'status', 'fanpageId', 'browserProfileId', 'channel', 'contentType'];
+        $intFields = ['id', 'status', 'targetType', 'fanpageId', 'facebookAccountId', 'browserProfileId', 'channel', 'contentType'];
         foreach ($intFields as $fieldName) {
             $this->add(CommonFieldFilters::intField($fieldName));
         }

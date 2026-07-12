@@ -253,7 +253,9 @@ CREATE TABLE IF NOT EXISTS `posts` (
     `title`            VARCHAR(500)    DEFAULT NULL,
     `content`          MEDIUMTEXT      DEFAULT NULL,
     `contentType`      TINYINT         NOT NULL DEFAULT 1,      -- 1 text,2 image,3 video,4 link,5 poll
+    `targetType`       TINYINT         NOT NULL DEFAULT 1,      -- 1 fanpage, 2 profile (trang cá nhân)
     `fanpageId`        BIGINT UNSIGNED DEFAULT NULL,
+    `facebookAccountId` BIGINT UNSIGNED DEFAULT NULL,           -- đích khi targetType = profile
     `browserProfileId` BIGINT UNSIGNED DEFAULT NULL,
     `aiAgentId`        BIGINT UNSIGNED DEFAULT NULL,
     `status`           TINYINT         NOT NULL DEFAULT 1,      -- 1 draft,2 scheduled,3 processing,4 published,5 failed,6 expired,7 deleted
@@ -275,11 +277,14 @@ CREATE TABLE IF NOT EXISTS `posts` (
     KEY `idx_posts_status` (`status`),
     KEY `idx_posts_scheduledAt` (`scheduledAt`),
     KEY `idx_posts_fanpage` (`fanpageId`),
+    KEY `idx_posts_fb_account` (`facebookAccountId`),
     KEY `idx_posts_browser_profile` (`browserProfileId`),
     KEY `idx_posts_ai_agent` (`aiAgentId`),
     KEY `idx_posts_owner_status` (`createdById`, `status`),
     CONSTRAINT `fk_posts_fanpage` FOREIGN KEY (`fanpageId`)
         REFERENCES `fanpages` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `fk_posts_fb_account` FOREIGN KEY (`facebookAccountId`)
+        REFERENCES `facebook_accounts` (`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_posts_browser_profile` FOREIGN KEY (`browserProfileId`)
         REFERENCES `browser_profiles` (`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_posts_ai_agent` FOREIGN KEY (`aiAgentId`)
@@ -318,6 +323,27 @@ CREATE TABLE IF NOT EXISTS `post_execution_logs` (
     PRIMARY KEY (`id`),
     KEY `idx_post_exec_logs_post` (`postId`),
     CONSTRAINT `fk_post_exec_logs_post` FOREIGN KEY (`postId`)
+        REFERENCES `posts` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- post_jobs — Hàng đợi job đăng bài (worker kéo theo runAt). Worker/agent Chrome
+--             chạy ở máy riêng; đăng thật cắm vào BrowserAgentClient.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `post_jobs` (
+    `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `postId`     BIGINT UNSIGNED NOT NULL,
+    `status`     TINYINT         NOT NULL DEFAULT 1,   -- 1 pending,2 processing,3 done,4 canceled,5 failed
+    `runAt`      DATETIME        NOT NULL,             -- thời điểm được phép chạy
+    `lockToken`  VARCHAR(64)     DEFAULT NULL,         -- token claim nguyên tử (chống 2 worker giành 1 job)
+    `lockedAt`   DATETIME        DEFAULT NULL,
+    `lastError`  VARCHAR(255)    DEFAULT NULL,
+    `createdAt`  BIGINT UNSIGNED DEFAULT NULL,
+    `modifiedAt` BIGINT UNSIGNED DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_post_jobs_post` (`postId`),
+    KEY `idx_post_jobs_due` (`status`, `runAt`),
+    CONSTRAINT `fk_post_jobs_post` FOREIGN KEY (`postId`)
         REFERENCES `posts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -7,7 +7,7 @@ use Application\Factory\AppServiceFactory;
 
 /**
  * HTTP client tối giản cho Facebook Graph API (kênh Graph API, docs mục 6.5).
- * - Chỉ GET (đọc token/metadata); đăng bài qua Graph API sẽ bổ sung sau.
+ * - GET (đọc token/metadata) + POST (đăng bài /feed, /photos, /videos — GraphPublisher).
  * - Lỗi mạng/HTTP/JSON đều trả về dạng ['error' => ['message' => ...]] giống format lỗi
  *   của chính Graph API, nên caller chỉ cần kiểm tra key 'error'.
  */
@@ -31,17 +31,38 @@ class GraphApiClient extends AppServiceFactory
         return $decoded;
     }
 
-    /** @return array{0: ?string, 1: ?string} [body, error] */
-    private function request(string $url): array
+    /** POST form-encoded (đăng bài). Token truyền trong $params['access_token']. */
+    public function post(string $path, array $params = []): array
+    {
+        $url = self::GRAPH_BASE . '/' . ltrim($path, '/');
+
+        [$body, $error] = $this->request($url, $params);
+        if ($error !== null) {
+            return ['error' => ['message' => $error]];
+        }
+
+        $decoded = json_decode((string)$body, true);
+        if (! is_array($decoded)) {
+            return ['error' => ['message' => 'Graph API trả về dữ liệu không hợp lệ']];
+        }
+        return $decoded;
+    }
+
+    /** @return array{0: ?string, 1: ?string} [body, error] — $postFields != null → POST */
+    private function request(string $url, ?array $postFields = null): array
     {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_CONNECTTIMEOUT => 10,
-                CURLOPT_TIMEOUT        => 20,
+                CURLOPT_TIMEOUT        => $postFields !== null ? 120 : 20,
                 CURLOPT_SSL_VERIFYPEER => true,
             ]);
+            if ($postFields !== null) {
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postFields));
+            }
             $caInfo = $this->resolveCaInfo();
             if ($caInfo !== null) {
                 curl_setopt($ch, CURLOPT_CAINFO, $caInfo);
@@ -54,7 +75,13 @@ class GraphApiClient extends AppServiceFactory
 
         // InfinityFree/host không có ext-curl: fallback qua stream, ignore_errors để
         // vẫn đọc được body JSON khi Graph API trả HTTP 4xx.
-        $context = stream_context_create(['http' => ['timeout' => 20, 'ignore_errors' => true]]);
+        $http = ['timeout' => $postFields !== null ? 120 : 20, 'ignore_errors' => true];
+        if ($postFields !== null) {
+            $http['method']  = 'POST';
+            $http['header']  = 'Content-Type: application/x-www-form-urlencoded';
+            $http['content'] = http_build_query($postFields);
+        }
+        $context = stream_context_create(['http' => $http]);
         $body = @file_get_contents($url, false, $context);
         if ($body === false) {
             return [null, 'Không gọi được Graph API (thiếu ext-curl và allow_url_fopen tắt)'];
