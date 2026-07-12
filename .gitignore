@@ -8,7 +8,8 @@ data/cache/*
 data/*.log
 data/php-error.log
 phpunit.xml
-
+agents.md
+/.agents
 # Angular build output copied from PostMate-Frontend (deployed via FTP, not tracked)
 public/*
 !public/.htaccess
