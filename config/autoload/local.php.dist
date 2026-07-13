@@ -13,4 +13,7 @@
  */
 
 return [
+    'cron' => [
+        'postingSecret' => 'change-this-long-random-secret',
+    ],
 ];

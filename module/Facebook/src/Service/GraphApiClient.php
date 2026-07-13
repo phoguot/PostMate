@@ -36,7 +36,7 @@ class GraphApiClient extends AppServiceFactory
     {
         $url = self::GRAPH_BASE . '/' . ltrim($path, '/');
 
-        [$body, $error] = $this->request($url, $params);
+        [$body, $error] = $this->request($url, $params, 'POST');
         if ($error !== null) {
             return ['error' => ['message' => $error]];
         }
@@ -48,9 +48,31 @@ class GraphApiClient extends AppServiceFactory
         return $decoded;
     }
 
-    /** @return array{0: ?string, 1: ?string} [body, error] — $postFields != null → POST */
-    private function request(string $url, ?array $postFields = null): array
+    /** DELETE object Graph API (hủy bài đã lên lịch khi còn được phép). */
+    public function delete(string $path, array $params = []): array
     {
+        $url = self::GRAPH_BASE . '/' . ltrim($path, '/');
+        if (! empty($params)) {
+            $url .= '?' . http_build_query($params);
+        }
+
+        [$body, $error] = $this->request($url, null, 'DELETE');
+        if ($error !== null) {
+            return ['error' => ['message' => $error]];
+        }
+
+        $decoded = json_decode((string)$body, true);
+        if (! is_array($decoded)) {
+            return ['error' => ['message' => 'Graph API trả về dữ liệu không hợp lệ']];
+        }
+        return $decoded;
+    }
+
+    /** @return array{0: ?string, 1: ?string} [body, error] */
+    private function request(string $url, ?array $postFields = null, string $method = 'GET'): array
+    {
+        $method = strtoupper($method);
+
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
@@ -59,8 +81,12 @@ class GraphApiClient extends AppServiceFactory
                 CURLOPT_TIMEOUT        => $postFields !== null ? 120 : 20,
                 CURLOPT_SSL_VERIFYPEER => true,
             ]);
-            if ($postFields !== null) {
+            if ($method === 'POST') {
                 curl_setopt($ch, CURLOPT_POST, true);
+            } elseif ($method !== 'GET') {
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+            }
+            if ($postFields !== null) {
                 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postFields));
             }
             $caInfo = $this->resolveCaInfo();
@@ -76,8 +102,10 @@ class GraphApiClient extends AppServiceFactory
         // InfinityFree/host không có ext-curl: fallback qua stream, ignore_errors để
         // vẫn đọc được body JSON khi Graph API trả HTTP 4xx.
         $http = ['timeout' => $postFields !== null ? 120 : 20, 'ignore_errors' => true];
+        if ($method !== 'GET') {
+            $http['method'] = $method;
+        }
         if ($postFields !== null) {
-            $http['method']  = 'POST';
             $http['header']  = 'Content-Type: application/x-www-form-urlencoded';
             $http['content'] = http_build_query($postFields);
         }

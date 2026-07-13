@@ -37,6 +37,20 @@ return [
                     ],
                 ],
             ],
+            'posting_cron'      => [
+                'type'    => Segment::class,
+                'options' => [
+                    'route'       => '/api/cron/posting[/:action]',
+                    'constraints' => [
+                        'action' => '[a-zA-Z][a-zA-Z0-9_-]*',
+                    ],
+                    'defaults'    => [
+                        '__NAMESPACE__' => 'Posting\Controller',
+                        'controller'    => Controller\CronController::class,
+                        'action'        => 'run',
+                    ],
+                ],
+            ],
         ],
     ],
 
@@ -44,6 +58,7 @@ return [
         'factories' => [
             Controller\PostController::class      => AppInvokableFactory::class,
             Controller\DashboardController::class => AppInvokableFactory::class,
+            Controller\CronController::class      => AppInvokableFactory::class,
         ],
     ],
 

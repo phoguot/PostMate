@@ -50,6 +50,41 @@ class QueueService extends AppServiceFactory
     }
 
     /**
+     * Chạy một lượt ngắn cho HTTP cron: claim tối đa $limit job tới hạn rồi thoát.
+     * Dùng thay cho worker loop trên shared host.
+     */
+    public function drainDueJobs(int $limit = 5): array
+    {
+        $limit = max(1, min(20, $limit));
+        $processed = 0;
+        $errors = [];
+
+        while ($processed < $limit) {
+            $job = $this->claimNext();
+            if ($job === null) {
+                break;
+            }
+
+            try {
+                $this->getContainerEntry(PostExecutor::class)->executeJob($job);
+            } catch (\Throwable $e) {
+                $errors[] = [
+                    'jobId' => $job->getId(),
+                    'error' => $e->getMessage(),
+                ];
+            }
+            $processed++;
+        }
+
+        return [
+            'processed' => $processed,
+            'expired'   => $this->expireStaleJobs(),
+            'pending'   => $this->getPendingCount(),
+            'errors'    => $errors,
+        ];
+    }
+
+    /**
      * Đánh dấu expired các bài scheduled quá hạn mà không có job pending còn sống
      * (job đã bị hủy/thất bại nhưng bài vẫn treo scheduled). Chạy mỗi phút từ worker.
      * Trả số bài bị đánh dấu expired.

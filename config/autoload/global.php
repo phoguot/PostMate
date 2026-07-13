@@ -8,11 +8,9 @@ use Laminas\Session\Config\SessionConfig;
 use Laminas\Session\SessionManager;
 
 return [
-    'cors' => [
-        'allowed_origins' => [
-            'https://post-mate-fe.vercel.app',
-            'http://localhost:4200',
-        ],
+    'cron' => [
+        'postingSecret'       => '',
+        'postingDefaultLimit' => 5,
     ],
     'service_manager' => [
         'factories' => [

@@ -11,6 +11,7 @@ use Posting\Model\Post\PostMediaMapper;
 use Posting\Model\Post\PostMediaModel;
 use Posting\Model\Post\PostModel;
 use Posting\Service\BrowserAgentClient;
+use Posting\Service\CronService;
 use Posting\Service\DashboardService;
 use Posting\Service\GraphPublisher;
 use Posting\Service\PostExecutor;
@@ -37,6 +38,7 @@ class Module
                 JobMapper::class => AppInvokableFactory::class,
                 ExecutionLogMapper::class => AppInvokableFactory::class,
                 PostService::class     => AppInvokableFactory::class,
+                CronService::class     => AppInvokableFactory::class,
                 DashboardService::class => AppInvokableFactory::class,
                 QueueService::class => AppInvokableFactory::class,
                 PostExecutor::class => AppInvokableFactory::class,

@@ -251,6 +251,13 @@ class PostService extends AppServiceFactory
             if (! $mapper->getPost($existing)) {
                 return $apiResult->errorData404Response([AppMessage::NO_DATA]);
             }
+            if ($this->isNativeScheduledPost($existing)) {
+                $cancel = $this->cancelNativeGraphSchedule($existing);
+                if (empty($cancel['success'])) {
+                    return $apiResult->errorResponse([$cancel['error'] ?? 'Không hủy được lịch Facebook']);
+                }
+            }
+            $this->cancelJob($existing);
             // FE không gửi lại targetType khi sửa → giữ nguyên đích của bài hiện có (tránh mất facebookAccountId/fanpageId).
             if (! $targetTypeProvided) {
                 $targetType = $existing->getTargetType() ?? PostConst::TARGET_FANPAGE;
@@ -260,7 +267,11 @@ class PostService extends AppServiceFactory
                 ? (int)$targetIds[0]
                 : ($targetType === PostConst::TARGET_PROFILE ? $existing->getFacebookAccountId() : $existing->getFanpageId());
             $saved = $this->buildAndSavePost($mapper, $formData, $userId, $status, $contentType, $scheduledAt, $targetType, $targetId, $media, $id);
-            return $apiResult->successResponse(['ids' => [$saved->getId()]], [AppMessage::UPDATE_SUCCESSFULLY]);
+            $data = ['ids' => [$saved->getId()]];
+            if ($status === PostConst::STATUS_SCHEDULED) {
+                $data['delivery'] = [$this->dispatchScheduledPost($saved, $media, $scheduledAt)];
+            }
+            return $apiResult->successResponse($data, [AppMessage::UPDATE_SUCCESSFULLY]);
         }
 
         // Danh sách đích đăng: fanpage (fanpageIds/fanpageId) hoặc trang cá nhân (facebookAccountIds/facebookAccountId).
@@ -276,6 +287,7 @@ class PostService extends AppServiceFactory
         }
 
         $savedIds = [];
+        $delivery = [];
         foreach ($targetIds as $targetId) {
             $targetId = $targetId !== null ? (int)$targetId : null;
             $channel  = $this->resolveChannel($targetType, $targetId, $formData);
@@ -291,7 +303,7 @@ class PostService extends AppServiceFactory
             $savedIds[] = $saved->getId();
 
             if ($status === PostConst::STATUS_SCHEDULED) {
-                $this->enqueueJob($saved, $scheduledAt);
+                $delivery[] = $this->dispatchScheduledPost($saved, $media, $scheduledAt);
             }
         }
 
@@ -299,7 +311,12 @@ class PostService extends AppServiceFactory
             return $apiResult->errorResponse([AppMessage::INVALID_DATA]);
         }
 
-        return $apiResult->successResponse(['ids' => $savedIds], [AppMessage::ADD_SUCCESSFULLY]);
+        $data = ['ids' => $savedIds];
+        if (! empty($delivery)) {
+            $data['delivery'] = $delivery;
+        }
+
+        return $apiResult->successResponse($data, [AppMessage::ADD_SUCCESSFULLY]);
     }
 
     /**
@@ -454,6 +471,16 @@ class PostService extends AppServiceFactory
             return $apiResult->errorResponse(['Bài viết đang được xử lý, không thể đổi trạng thái']);
         }
 
+        if ($status !== PostConst::STATUS_SCHEDULED) {
+            if ($this->isNativeScheduledPost($model)) {
+                $cancel = $this->cancelNativeGraphSchedule($model);
+                if (empty($cancel['success'])) {
+                    return $apiResult->errorResponse([$cancel['error'] ?? 'Không hủy được lịch Facebook']);
+                }
+            }
+            $this->cancelJob($model);
+        }
+
         $mapper->updateAttrsPost($model, ['status' => $status]);
         return $apiResult->successResponse(['status' => $status], [AppMessage::UPDATE_SUCCESSFULLY]);
     }
@@ -484,6 +511,12 @@ class PostService extends AppServiceFactory
             return $apiResult->errorResponse(['Bài viết đang được xử lý, không thể xóa']);
         }
 
+        if ($this->isNativeScheduledPost($model)) {
+            $cancel = $this->cancelNativeGraphSchedule($model);
+            if (empty($cancel['success'])) {
+                return $apiResult->errorResponse([$cancel['error'] ?? 'Không hủy được lịch Facebook']);
+            }
+        }
         $this->cancelJob($model);
         $mapper->softDeletePost($model);
 
@@ -615,6 +648,74 @@ class PostService extends AppServiceFactory
             return;
         }
         $this->getContainerEntry(QueueService::class)->enqueueJob((int)$post->getId(), $runAt);
+    }
+
+    /**
+     * Chọn cách chạy bài scheduled:
+     * - Graph API fanpage đủ điều kiện: giao lịch cho Facebook tự publish.
+     * - Các case còn lại: ghi post_jobs để HTTP cron/worker xử lý.
+     */
+    private function dispatchScheduledPost(PostModel $post, array $media, ?string $scheduledAt): array
+    {
+        $result = [
+            'id'       => $post->getId(),
+            'delivery' => 'queue',
+            'fbPostId' => null,
+        ];
+
+        if ($this->canUseNativeGraphSchedule($post, $scheduledAt)) {
+            $graphResult = $this->getContainerEntry(GraphPublisher::class)->schedule($post, $media, (string)$scheduledAt);
+            if (! empty($graphResult['success']) && ! empty($graphResult['fbPostId'])) {
+                $fbPostId = (string)$graphResult['fbPostId'];
+                $this->getContainerEntry(PostMapper::class)->updateAttrsPost($post, ['fbPostId' => $fbPostId]);
+                $post->setFbPostId($fbPostId);
+                $this->enqueueJob($post, $scheduledAt);
+                return [
+                    'id'       => $post->getId(),
+                    'delivery' => 'facebook_schedule',
+                    'fbPostId' => $fbPostId,
+                    'tracking' => 'queue',
+                ];
+            }
+            $result['nativeScheduleError'] = $graphResult['error'] ?? 'Không lên lịch trực tiếp được qua Graph API';
+        }
+
+        $this->enqueueJob($post, $scheduledAt);
+        return $result;
+    }
+
+    private function canUseNativeGraphSchedule(PostModel $post, ?string $scheduledAt): bool
+    {
+        if (! $scheduledAt || (int)$post->getTargetType() !== PostConst::TARGET_FANPAGE) {
+            return false;
+        }
+        if ((int)$post->getChannel() !== PostConst::CHANNEL_GRAPH_API) {
+            return false;
+        }
+
+        $timestamp = strtotime($scheduledAt);
+        if ($timestamp === false) {
+            return false;
+        }
+        $leadSec = $timestamp - time();
+        return $leadSec >= 600 && $leadSec <= 6480000;
+    }
+
+    private function isNativeScheduledPost(PostModel $post): bool
+    {
+        return (int)$post->getStatus() === PostConst::STATUS_SCHEDULED
+            && (int)$post->getChannel() === PostConst::CHANNEL_GRAPH_API
+            && (string)$post->getFbPostId() !== '';
+    }
+
+    private function cancelNativeGraphSchedule(PostModel $post): array
+    {
+        $result = $this->getContainerEntry(GraphPublisher::class)->delete($post);
+        if (! empty($result['success'])) {
+            $this->getContainerEntry(PostMapper::class)->updateAttrsPost($post, ['fbPostId' => null]);
+            $post->setFbPostId(null);
+        }
+        return $result;
     }
 
     /** Hủy job khỏi hàng đợi (khi xóa bài / sửa lịch). */
