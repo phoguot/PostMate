@@ -58,8 +58,14 @@ class PostExecutor extends AppServiceFactory
             return;
         }
 
-        // 2. Idempotency: đã có fbPostId → coi như đã đăng.
+        // 2. Idempotency: lịch native không phải là bài đã publish ngay.
+        // Guard này xử lý job cũ còn sót mà không làm sai trạng thái native schedule.
         if ($post->getFbPostId()) {
+            if ($this->isNativeScheduledPost($post)) {
+                $postMapper->updateAttrsPost($post, ['status' => PostConst::STATUS_SCHEDULED]);
+                $jobMapper->markDone((int)$job->getId());
+                return;
+            }
             $this->finishPublished($post, $post->getFbPostId(), $job);
             return;
         }
@@ -355,5 +361,14 @@ class PostExecutor extends AppServiceFactory
     private function idempotencyKey(PostModel $post): string
     {
         return $post->getId() . ':' . (int)$post->getAttemptCount();
+    }
+
+    private function isNativeScheduledPost(PostModel $post): bool
+    {
+        return (int)$post->getTargetType() === PostConst::TARGET_FANPAGE
+            && (int)$post->getChannel() === PostConst::CHANNEL_GRAPH_API
+            && (string)$post->getFbPostId() !== ''
+            && ! empty($post->getScheduledAt())
+            && strtotime((string)$post->getScheduledAt()) > time();
     }
 }

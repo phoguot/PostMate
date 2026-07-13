@@ -266,7 +266,20 @@ class PostService extends AppServiceFactory
             $targetId  = ! empty($targetIds)
                 ? (int)$targetIds[0]
                 : ($targetType === PostConst::TARGET_PROFILE ? $existing->getFacebookAccountId() : $existing->getFanpageId());
-            $saved = $this->buildAndSavePost($mapper, $formData, $userId, $status, $contentType, $scheduledAt, $targetType, $targetId, $media, $id);
+            if ($status === PostConst::STATUS_SCHEDULED && $targetId) {
+                $check = $this->validatePostability($userId, $targetType, $targetId, $formData);
+                if (! $check['canPost']) {
+                    return $apiResult->errorResponse([$check['reason'] ?? AppMessage::INVALID_DATA]);
+                }
+            }
+
+            // Khi sửa, giữ channel cũ nếu FE không gửi lại; profile vẫn luôn dùng browser.
+            $channelData = $formData;
+            if (empty($channelData['channel']) && $existing->getChannel()) {
+                $channelData['channel'] = $existing->getChannel();
+            }
+            $channel = $this->resolveChannel($targetType, $targetId, $channelData);
+            $saved = $this->buildAndSavePost($mapper, $formData, $userId, $status, $contentType, $scheduledAt, $targetType, $targetId, $media, $id, $channel);
             $data = ['ids' => [$saved->getId()]];
             if ($status === PostConst::STATUS_SCHEDULED) {
                 $data['delivery'] = [$this->dispatchScheduledPost($saved, $media, $scheduledAt)];
@@ -599,12 +612,12 @@ class PostService extends AppServiceFactory
      */
     private function resolveChannel(int $targetType, ?int $targetId, array $formData): int
     {
-        if (! empty($formData['channel'])) {
-            return (int)$formData['channel'];
-        }
         // Trang cá nhân: Graph API không cho publish lên timeline → luôn dùng browser automation.
         if ($targetType === PostConst::TARGET_PROFILE) {
             return PostConst::CHANNEL_BROWSER;
+        }
+        if (! empty($formData['channel'])) {
+            return (int)$formData['channel'];
         }
         if ($targetId) {
             $fanpage = new FanpageModel();
@@ -678,7 +691,6 @@ class PostService extends AppServiceFactory
                 $postMapper = $this->getContainerEntry(PostMapper::class);
                 $postMapper->updateAttrsPost($post, ['fbPostId' => $fbPostId]);
                 $post->setFbPostId($fbPostId);
-                $this->enqueueJob($post, $scheduledAt);
                 return [
                     'id'       => $post->getId(),
                     'delivery' => 'facebook_schedule',

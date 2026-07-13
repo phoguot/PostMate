@@ -84,9 +84,11 @@ Màn hình đầu tiên sau khi đăng nhập.
 |-----|---------|
 | **Lưu nháp** | Lưu lại để chỉnh sau, chưa đăng. Không bắt buộc nhập đủ. |
 | **Lên lịch** | Đưa bài vào hàng chờ, đăng đúng ngày-giờ đã hẹn. |
-| **Đăng ngay** | Gửi yêu cầu đăng lập tức. |
+| **Đăng ngay** | Đưa bài vào hàng chờ với thời gian chạy là hiện tại. Bài sẽ được đăng khi cron/worker xử lý job. |
 
 - Với **Lên lịch** / **Đăng ngay**, hệ thống kiểm tra bạn đã chọn fanpage và nhập nội dung chưa; thiếu sẽ báo lỗi.
+- Với **Đăng ngay**, sau khi bấm thành công bài chưa được publish trực tiếp trong request của giao diện. Backend tạo job trong `post_jobs` với giờ chạy là hiện tại; cần cron/worker gọi endpoint xử lý thì bài mới được đẩy lên Facebook.
+- Trên production InfinityFree, không chạy `php bin/worker.php --loop`; dùng HTTP cron gọi `/api/cron/posting/run` để xử lý hàng chờ.
 - Sau khi lưu thành công, hệ thống chuyển bạn sang màn **Bài viết**.
 
 ---
@@ -236,12 +238,12 @@ Diễn giải từng bước:
 1. **Soạn & lưu** — Bạn tạo bài ở màn *Tạo nội dung* rồi chọn một trong ba:
    - **Lưu nháp** → bài ở trạng thái *Nháp*, chưa đăng.
    - **Lên lịch** → bài chuyển sang *Đã lên lịch*, chờ đúng ngày-giờ đã hẹn.
-   - **Đăng ngay** → bài được xếp đăng ngay lập tức.
+   - **Đăng ngay** → bài chuyển sang *Đã lên lịch* với thời gian chạy là hiện tại, chờ cron/worker xử lý ngay lượt kế tiếp.
 2. **Kiểm tra trước khi xếp lịch** — Hệ thống kiểm tra fanpage có **đủ điều kiện đăng** không (token/cookie còn hạn, tài khoản không bị chặn) và tự chọn **kênh đăng**:
    - Fanpage bật **Graph API** → đăng qua API (ưu tiên, ổn định).
    - Ngược lại → đăng bằng **trình duyệt** chống phát hiện (phương án dự phòng).
    - *Nếu đăng cho nhiều fanpage cùng lúc: fanpage nào không đủ điều kiện sẽ bị bỏ qua, các fanpage còn lại vẫn được xếp.*
-3. **Tới giờ, hệ thống đăng bài** — Bài chuyển sang *Đang xử lý*, thực hiện đăng qua kênh đã chọn, rồi **xác nhận bài thật sự lên trang**.
+3. **Tới giờ, hệ thống đăng bài** — Khi cron/worker chạy, bài chuyển sang *Đang xử lý*, thực hiện đăng qua kênh đã chọn, rồi **xác nhận bài thật sự lên trang**.
 4. **Kết quả:**
    - Thành công → *Đã đăng*, lưu lại liên kết bài và bắt đầu thu thập số liệu tương tác.
    - Thất bại → tùy loại lỗi: bị giới hạn tần suất sẽ **tự thử lại sau**; lỗi nghiêm trọng (vi phạm nội dung, mất quyền) chuyển *Thất bại*; nếu tài khoản dính checkpoint, các bài đang chờ của tài khoản đó sẽ bị hủy và có cảnh báo ở màn *Tài khoản*.
@@ -250,11 +252,62 @@ Diễn giải từng bước:
 
 > **Theo dõi ở đâu:** trạng thái từng bài xem ở màn **Bài viết** (mở chi tiết có tab *Timeline* để xem tiến trình); các bài đang chờ xem ở **Lịch đăng**; số liệu tổng hợp xem ở **Dashboard**.
 
-### 12.3. ⚠️ Tình trạng hiện tại (quan trọng)
+### 12.3. Cách chạy cron để đăng bài
+
+Backend hiện tại xử lý đăng bài qua hàng chờ:
+
+- **Đăng ngay**: tạo job có giờ chạy là hiện tại.
+- **Lên lịch**: tạo job có giờ chạy đúng theo lịch đã chọn, hoặc giao lịch trực tiếp cho Facebook nếu đủ điều kiện Graph API native schedule.
+- **Cron/worker**: là phần thực sự lấy job tới hạn và gọi Graph API/trình duyệt để đăng.
+
+Endpoint cần gọi:
+
+```text
+GET|POST https://postmate.infinityfree.io/api/cron/posting/run?i=1
+```
+
+Cần gửi secret bằng một trong hai cách:
+
+```text
+Header: X-Cron-Secret: <postingSecret>
+```
+
+hoặc:
+
+```text
+Query/body: secret=<postingSecret>
+```
+
+Cách chạy thực tế:
+
+1. Cấu hình external cron gọi endpoint này mỗi 1 phút để tự xử lý bài tới hạn.
+2. Sau khi bấm **Đăng ngay**, nếu muốn xử lý liền, có thể gọi endpoint cron ngay một lượt.
+3. Mỗi lần gọi cron sẽ xử lý một số job tới hạn, mặc định tối đa 5 job/lượt.
+4. Nếu response có `processed > 0`, nghĩa là đã có job được xử lý.
+5. Nếu response là `processed = 0`, `pending = 0`, `errors = []`, nghĩa là hiện không có job tới hạn hoặc job đã được xử lý trước đó.
+6. Nếu bài lỗi, xem màn **Bài viết** hoặc chi tiết bài để đọc `lastError`/Timeline.
+
+Ví dụ response thành công:
+
+```json
+{
+  "code": 1,
+  "data": {
+    "processed": 1,
+    "expired": 0,
+    "pending": 0,
+    "errors": []
+  }
+}
+```
+
+Tóm lại: **click Đăng ngay xong vẫn cần cron/worker chạy**. Nếu không có cron/worker, bài sẽ nằm ở trạng thái *Đã lên lịch* hoặc *Đang chờ* và chưa tự lên Facebook.
+
+### 12.4. ⚠️ Tình trạng hiện tại (quan trọng)
 
 - Các bước **soạn bài, lưu nháp, lên lịch, quản lý tài khoản/fanpage/cookie/trình duyệt/cài đặt** đã hoạt động thật và lưu vào cơ sở dữ liệu.
 - **Chưa có chức năng thêm/kết nối tài khoản, fanpage hay trang cá nhân mới trên giao diện** — dữ liệu phải nạp sẵn vào CSDL (xem [mục 8.bis](#8bis-kết-nối-tài-khoản--fanpage--trang-cá-nhân-chưa-hỗ-trợ)).
-- **Bộ phận tự động đăng bài (worker/hàng đợi) chưa được kích hoạt**: bài ở trạng thái *Đã lên lịch* hiện **chưa tự động đẩy lên Facebook** khi tới giờ — phần này đang chờ tích hợp.
+- **Bộ phận tự động đăng bài chạy bằng HTTP cron**: production cần external cron gọi `/api/cron/posting/run`. Nếu cron không chạy, bài ở trạng thái *Đã lên lịch* sẽ chưa tự động đẩy lên Facebook khi tới giờ.
 - Một số nút như **Đăng nhập lại, Làm mới cookie, Khởi động/Mở trình duyệt** hiện trả kết quả **mô phỏng** (báo thành công) nhưng chưa thực sự điều khiển trình duyệt/Facebook.
 - Đây là thông tin để bạn không hiểu nhầm là lỗi; các phần này sẽ được hoàn thiện ở bản cập nhật sau.
 
@@ -268,7 +321,8 @@ Diễn giải từng bước:
 4. Vào **Cookie** đảm bảo tài khoản có phiên đăng nhập hợp lệ; (nếu đăng bằng trình duyệt) chuẩn bị **Trình duyệt**.
 5. Kiểm tra **Fanpage** đang ở trạng thái **có thể đăng**.
 6. Vào **Tạo nội dung** để soạn bài → **Lên lịch** hoặc **Đăng ngay**.
-7. Theo dõi tiến trình ở **Lịch đăng**, **Bài viết** và **Dashboard**.
+7. Đảm bảo external cron đang gọi `/api/cron/posting/run`, nhất là khi muốn bài **Đăng ngay** được xử lý liền.
+8. Theo dõi tiến trình ở **Lịch đăng**, **Bài viết** và **Dashboard**.
 
 ---
 
@@ -276,7 +330,7 @@ Diễn giải từng bước:
 
 **Không đăng nhập được?** Kiểm tra lại tên đăng nhập/mật khẩu; nếu vẫn lỗi, liên hệ quản trị hệ thống.
 
-**Bài đã lên lịch nhưng chưa thấy đăng?** Kiểm tra fanpage còn ở trạng thái **có thể đăng**, cookie/token chưa hết hạn, và trình duyệt (nếu dùng) đang chạy.
+**Bài đã lên lịch hoặc bấm Đăng ngay nhưng chưa thấy đăng?** Kiểm tra external cron đã gọi `/api/cron/posting/run` chưa, fanpage còn ở trạng thái **có thể đăng**, cookie/token chưa hết hạn, và trình duyệt (nếu dùng) đang chạy. Nếu bài thất bại, mở chi tiết bài để xem `lastError`/Timeline.
 
 **Nút “Đăng nhập lại” / “Làm mới” để làm gì?** Khi tài khoản bị đăng xuất hoặc phiên hết hạn, dùng các nút này để khôi phục quyền đăng bài.
 

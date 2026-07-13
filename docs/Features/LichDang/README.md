@@ -24,3 +24,4 @@ Quản lý và theo dõi các bài viết **đã lên lịch**: trạng thái, s
 ## Tài liệu liên quan
 - [Nghiệp vụ](./NGHIEP_VU.md)
 - [Các hàm xử lý luồng nghiệp vụ](./HAM_XU_LY.md)
+- [Luồng xử lý đăng bài thực tế](./LUONG_XU_LY_DANG_BAI.md)

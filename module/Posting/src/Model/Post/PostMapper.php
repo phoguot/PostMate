@@ -411,6 +411,8 @@ class PostMapper extends AppMapper
         $select = $dbSql->select(['p' => PostMapper::TABLE_NAME]);
         $select->where(['p.status' => PostConst::STATUS_SCHEDULED]);
         $select->where(['p.scheduledAt < ?' => $deadline]);
+        // Bài đã được Facebook nhận lịch native vẫn còn scheduled, không expire nội bộ.
+        $select->where->isNull('p.fbPostId');
         $select->limit(200);
 
         $rows = $dbAdapter->query($dbSql->buildSqlString($select), $dbAdapter::QUERY_MODE_EXECUTE);
