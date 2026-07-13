@@ -21,6 +21,7 @@ class CronController extends AppController
             $params['secret'] = (string)$header->getFieldValue();
         }
 
-        return $this->getContainerEntry(CronService::class)->runPostingCron($params);
+        $cronService = $this->getContainerEntry(CronService::class);
+        return $cronService->runPostingCron($params);
     }
 }

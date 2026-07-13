@@ -143,11 +143,12 @@ class BrowserProfileService extends AppServiceFactory
         }
 
         if ($model->getServerId()) {
-            $server = $this->getContainerEntry(ServerMapper::class)->getById((int)$model->getServerId());
+            $serverMapper = $this->getContainerEntry(ServerMapper::class);
+            $server = $serverMapper->getById((int)$model->getServerId());
             if ($server && (int)$server->getStatus() !== 1) { // ServerConst::STATUS_ONLINE
                 return $apiResult->errorResponse(['Máy chủ đang ngoại tuyến']);
             }
-            $running = $this->getContainerEntry(ServerMapper::class)->countRunningInstances((int)$model->getServerId());
+            $running = $serverMapper->countRunningInstances((int)$model->getServerId());
             if ($server && $server->getMaxInstances() && $running >= $server->getMaxInstances()) {
                 return $apiResult->errorResponse(['Máy chủ đã đạt giới hạn số instance (max_instances) — vui lòng chờ hoặc chọn máy chủ khác']);
             }
@@ -159,10 +160,11 @@ class BrowserProfileService extends AppServiceFactory
 
         // Nạp cookie tài khoản gắn kèm (nếu có).
         if ($model->getFacebookAccountId()) {
-            $cookieId = $this->getContainerEntry(CookieMapper::class)
-                ->getLatestIdByAccountId((int)$model->getFacebookAccountId());
+            $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+            $cookieId = $cookieMapper->getLatestIdByAccountId((int)$model->getFacebookAccountId());
             if ($cookieId) {
-                $this->getContainerEntry(CookieService::class)->loadCookieIntoProfile($cookieId);
+                $cookieService = $this->getContainerEntry(CookieService::class);
+                $cookieService->loadCookieIntoProfile($cookieId);
             }
         }
 
@@ -275,7 +277,8 @@ class BrowserProfileService extends AppServiceFactory
 
     private function logActivity(BrowserProfileModel $model, string $type, string $message, int $level): void
     {
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $model->getUserId(),
             'browserProfile:' . $model->getId(),
             $type,

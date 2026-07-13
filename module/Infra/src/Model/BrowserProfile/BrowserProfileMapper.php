@@ -107,9 +107,17 @@ class BrowserProfileMapper extends AppMapper
             }
         }
 
-        $serverNameMap = $serverIds ? $this->getContainerEntry(ServerMapper::class)->getNameMapByIds($serverIds) : [];
+        $serverNameMap = [];
+        if ($serverIds) {
+            $serverMapper = $this->getContainerEntry(ServerMapper::class);
+            $serverNameMap = $serverMapper->getNameMapByIds($serverIds);
+        }
         $serverIpMap   = $this->getServerIpMap($serverIds);
-        $proxyIpMap    = $proxyIds ? $this->getContainerEntry(ProxyMapper::class)->getIpMapByIds($proxyIds) : [];
+        $proxyIpMap = [];
+        if ($proxyIds) {
+            $proxyMapper = $this->getContainerEntry(ProxyMapper::class);
+            $proxyIpMap = $proxyMapper->getIpMapByIds($proxyIds);
+        }
         $accountInfoMap = $accountIds ? $this->getFacebookAccountInfoMap($accountIds) : [];
 
         foreach ($items as $bp) {
@@ -198,8 +206,16 @@ class BrowserProfileMapper extends AppMapper
 
         $serverIds = array_filter(array_column($rowsArr, 'serverId'));
         $proxyIds  = array_filter(array_column($rowsArr, 'proxyId'));
-        $serverNameMap = $serverIds ? $this->getContainerEntry(ServerMapper::class)->getNameMapByIds($serverIds) : [];
-        $proxyIpMap    = $proxyIds ? $this->getContainerEntry(ProxyMapper::class)->getIpMapByIds($proxyIds) : [];
+        $serverNameMap = [];
+        if ($serverIds) {
+            $serverMapper = $this->getContainerEntry(ServerMapper::class);
+            $serverNameMap = $serverMapper->getNameMapByIds($serverIds);
+        }
+        $proxyIpMap = [];
+        if ($proxyIds) {
+            $proxyMapper = $this->getContainerEntry(ProxyMapper::class);
+            $proxyIpMap = $proxyMapper->getIpMapByIds($proxyIds);
+        }
 
         $map = [];
         foreach ($rowsArr as $row) {

@@ -267,7 +267,8 @@ class FanpageService extends AppServiceFactory
         $mapper->cancelJobsForFanpage((int)$model->getId());
         $mapper->unlinkFanpage($model);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'fanpage:' . $model->getId(),
             'Gỡ liên kết fanpage',

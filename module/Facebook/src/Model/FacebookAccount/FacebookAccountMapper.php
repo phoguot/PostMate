@@ -99,10 +99,13 @@ class FacebookAccountMapper extends AppMapper
 
         $profileInfoMap = [];
         if (!empty($profileIds)) {
-            $profileInfoMap = $this->getContainerEntry(BrowserProfileMapper::class)->getInfoMapByIds($profileIds);
+            $browserProfileMapper = $this->getContainerEntry(BrowserProfileMapper::class);
+            $profileInfoMap = $browserProfileMapper->getInfoMapByIds($profileIds);
         }
-        $fanpageCountMap = $this->getContainerEntry(FanpageMapper::class)->countByAccountIds($accountIds);
-        $latestCookieMap = $this->getContainerEntry(CookieMapper::class)->getLatestByAccountIds($accountIds);
+        $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+        $fanpageCountMap = $fanpageMapper->countByAccountIds($accountIds);
+        $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+        $latestCookieMap = $cookieMapper->getLatestByAccountIds($accountIds);
 
         foreach ($items as $a) {
             /** @var FacebookAccountModel $a */
@@ -209,7 +212,11 @@ class FacebookAccountMapper extends AppMapper
         }
 
         $accountIds = array_keys($this->getInfoMapByIds($this->listAccountIds($item)));
-        $expiringCookie = $accountIds ? $this->getContainerEntry(CookieMapper::class)->countExpiringByAccountIds($accountIds) : 0;
+        $expiringCookie = 0;
+        if ($accountIds) {
+            $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+            $expiringCookie = $cookieMapper->countExpiringByAccountIds($accountIds);
+        }
 
         return [
             'total'          => array_sum($byStatus),

@@ -40,7 +40,8 @@ class MetaAppService extends AppServiceFactory
     public function resolveCredential(?int $userId): ?MetaAppCredentialModel
     {
         if ($userId) {
-            $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
+            $credentialMapper = $this->getContainerEntry(MetaAppCredentialMapper::class);
+            $credential = $credentialMapper->getByUserId($userId);
             if ($credential && $credential->getAppId() && $credential->getAppSecret()) {
                 return $credential;
             }
@@ -75,7 +76,8 @@ class MetaAppService extends AppServiceFactory
             return $apiResult->errorPage401Response([AppMessage::COMMON_401]);
         }
 
-        $credential = $this->getContainerEntry(MetaAppCredentialMapper::class)->getByUserId($userId);
+        $credentialMapper = $this->getContainerEntry(MetaAppCredentialMapper::class);
+        $credential = $credentialMapper->getByUserId($userId);
         if ($credential && $credential->getAppId()) {
             return $apiResult->successResponse($credential->getRespMetaApp() + ['global' => false]);
         }
@@ -116,7 +118,8 @@ class MetaAppService extends AppServiceFactory
             'appSecret' => (string)$formData['appSecret'],
         ]);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'metaApp:' . $model->getId(),
             'Kết nối Meta App',

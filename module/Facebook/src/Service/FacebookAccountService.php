@@ -159,7 +159,8 @@ class FacebookAccountService extends AppServiceFactory
     {
         $fpModel = new FanpageModel();
         $fpModel->setFacebookAccountId($accountId);
-        $search = $this->getContainerEntry(FanpageMapper::class)->searchFanpage($fpModel, 1, 100);
+        $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+        $search = $fanpageMapper->searchFanpage($fpModel, 1, 100);
         return array_map(fn(FanpageModel $fp) => $fp->getRespFanpage(), $search['items']);
     }
 
@@ -167,13 +168,15 @@ class FacebookAccountService extends AppServiceFactory
     {
         $ckModel = new CookieModel();
         $ckModel->setFacebookAccountId($accountId);
-        $search = $this->getContainerEntry(CookieMapper::class)->searchCookie($ckModel, 1, 50);
+        $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+        $search = $cookieMapper->searchCookie($ckModel, 1, 50);
         return array_map(fn(CookieModel $ck) => $ck->getRespCookie(), $search['items']);
     }
 
     private function getActivityLogs(int $accountId): array
     {
-        $logs = $this->getContainerEntry(ActivityLogMapper::class)->listByEntity('facebookAccount:' . $accountId, 50);
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $logs = $activityLogMapper->listByEntity('facebookAccount:' . $accountId, 50);
         return array_map(fn($log) => $log->getRespActivityLog(), $logs);
     }
 
@@ -194,7 +197,8 @@ class FacebookAccountService extends AppServiceFactory
             return $apiResult->errorPage401Response([AppMessage::COMMON_401]);
         }
 
-        $credential = $this->getContainerEntry(MetaAppService::class)->resolveCredential($userId);
+        $metaAppService = $this->getContainerEntry(MetaAppService::class);
+        $credential = $metaAppService->resolveCredential($userId);
         if (! $credential) {
             return $apiResult->errorResponse([
                 'Chưa cấu hình Meta App (App ID/App Secret) — vào Cài đặt > Facebook > Token & Quyền để kết nối trước',
@@ -248,7 +252,8 @@ class FacebookAccountService extends AppServiceFactory
         }
         $session->offsetUnset('state');
 
-        $credential = $this->getContainerEntry(MetaAppService::class)->resolveCredential($userId);
+        $metaAppService = $this->getContainerEntry(MetaAppService::class);
+        $credential = $metaAppService->resolveCredential($userId);
         if (! $credential) {
             return $this->redirectToFrontend(['fbConnect' => 'error', 'message' => 'Chưa cấu hình Meta App']);
         }
@@ -317,7 +322,8 @@ class FacebookAccountService extends AppServiceFactory
 
         $pageCount = $this->syncManagedPages($model, $userAccessToken);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'facebookAccount:' . $model->getId(),
             'Kết nối tài khoản',
@@ -432,10 +438,12 @@ class FacebookAccountService extends AppServiceFactory
             return ['canPost' => false, 'reason' => 'Chưa gắn trình duyệt'];
         }
 
-        $latestCookie = $this->getContainerEntry(CookieMapper::class)->getLatestByAccountIds([$account->getId()]);
+        $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+        $latestCookie = $cookieMapper->getLatestByAccountIds([$account->getId()]);
         $cookieStatus = $latestCookie[$account->getId()]['status'] ?? null;
 
-        $profileInfo   = $this->getContainerEntry(BrowserProfileMapper::class)->getInfoMapByIds([$account->getBrowserProfileId()]);
+        $browserProfileMapper = $this->getContainerEntry(BrowserProfileMapper::class);
+        $profileInfo = $browserProfileMapper->getInfoMapByIds([$account->getBrowserProfileId()]);
         $profileStatus = $profileInfo[$account->getBrowserProfileId()]['status'] ?? null;
 
         $ok = $cookieStatus === CookieConst::STATUS_VALID && $profileStatus !== BrowserProfileConst::STATUS_OFFLINE;
@@ -490,10 +498,12 @@ class FacebookAccountService extends AppServiceFactory
             $cookieModel->setBrowserProfileId($model->getBrowserProfileId());
             $cookieModel->setStatus(CookieConst::STATUS_VALID);
             $cookieModel->exchangeArray($loginResult['cookie']);
-            $this->getContainerEntry(CookieMapper::class)->saveCookie($cookieModel);
+            $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+            $cookieMapper->saveCookie($cookieModel);
         }
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'facebookAccount:' . $model->getId(),
             'Đăng nhập lại',
@@ -530,7 +540,8 @@ class FacebookAccountService extends AppServiceFactory
         $mapper->updateAttrs($model, ['status' => FacebookAccountConst::STATUS_CHECKPOINT]);
         $mapper->cancelJobsForAccount($accountId);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $model->getOwnerUserId(),
             'facebookAccount:' . $accountId,
             'Checkpoint',
@@ -575,7 +586,8 @@ class FacebookAccountService extends AppServiceFactory
         // browser_profiles.facebookAccountId tự SET NULL theo FK.
         $mapper->deleteAccount($model);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'facebookAccount:' . $model->getId(),
             'Xóa tài khoản',

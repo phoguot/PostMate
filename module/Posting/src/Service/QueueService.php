@@ -8,6 +8,7 @@ use Application\Model\ActivityLog\ActivityLogConst;
 use Application\Model\ActivityLog\ActivityLogMapper;
 use Posting\Model\Job\JobMapper;
 use Posting\Model\Job\JobModel;
+use Posting\Model\Log\ExecutionLogMapper;
 use Posting\Model\Post\PostConst;
 use Posting\Model\Post\PostMapper;
 use Posting\Model\Post\PostModel;
@@ -24,29 +25,34 @@ class QueueService extends AppServiceFactory
 
     public function enqueueJob(int $postId, string $runAt): int
     {
-        return $this->getContainerEntry(JobMapper::class)->enqueue($postId, $runAt);
+        $jobMapper = $this->getContainerEntry(JobMapper::class);
+        return $jobMapper->enqueue($postId, $runAt);
     }
 
     public function cancelJob(int $postId): void
     {
-        $this->getContainerEntry(JobMapper::class)->cancelByPostId($postId);
+        $jobMapper = $this->getContainerEntry(JobMapper::class);
+        $jobMapper->cancelByPostId($postId);
     }
 
     public function cancelJobsForPosts(array $postIds): void
     {
-        $this->getContainerEntry(JobMapper::class)->cancelByPostIds($postIds);
+        $jobMapper = $this->getContainerEntry(JobMapper::class);
+        $jobMapper->cancelByPostIds($postIds);
     }
 
     public function getPendingCount(): int
     {
-        return $this->getContainerEntry(JobMapper::class)->countPending();
+        $jobMapper = $this->getContainerEntry(JobMapper::class);
+        return $jobMapper->countPending();
     }
 
     /** Claim job tới hạn kế tiếp cho worker (null nếu không có). */
     public function claimNext(): ?JobModel
     {
         $lockToken = bin2hex(random_bytes(16));
-        return $this->getContainerEntry(JobMapper::class)->claimDue($lockToken);
+        $jobMapper = $this->getContainerEntry(JobMapper::class);
+        return $jobMapper->claimDue($lockToken);
     }
 
     /**
@@ -66,12 +72,23 @@ class QueueService extends AppServiceFactory
             }
 
             try {
-                $this->getContainerEntry(PostExecutor::class)->executeJob($job);
+                $postExecutor = $this->getContainerEntry(PostExecutor::class);
+                $postExecutor->executeJob($job);
             } catch (\Throwable $e) {
-                $errors[] = [
-                    'jobId' => $job->getId(),
-                    'error' => $e->getMessage(),
+                $error = $this->safeError($e->getMessage() ?: get_class($e));
+                $row = [
+                    'jobId'  => $job->getId(),
+                    'postId' => $job->getPostId(),
+                    'error'  => $error,
                 ];
+
+                try {
+                    $this->recordUnhandledFailure($job, $error);
+                } catch (\Throwable $persistError) {
+                    $row['persistError'] = $this->safeError($persistError->getMessage() ?: get_class($persistError));
+                }
+
+                $errors[] = $row;
             }
             $processed++;
         }
@@ -82,6 +99,42 @@ class QueueService extends AppServiceFactory
             'pending'   => $this->getPendingCount(),
             'errors'    => $errors,
         ];
+    }
+
+    private function recordUnhandledFailure(JobModel $job, string $error): void
+    {
+        $jobId = (int)$job->getId();
+        $postId = (int)$job->getPostId();
+
+        if ($jobId > 0) {
+            $jobMapper = $this->getContainerEntry(JobMapper::class);
+            $jobMapper->markFailed($jobId, $error);
+        }
+
+        if ($postId > 0) {
+            $logMapper = $this->getContainerEntry(ExecutionLogMapper::class);
+            $logMapper->log($postId, 'Lỗi cron: ' . $error, ExecutionLogMapper::STATUS_FAILED);
+
+            $post = new PostModel();
+            $post->setId($postId);
+            $postMapper = $this->getContainerEntry(PostMapper::class);
+            $postMapper->updateAttrsPost($post, ['status' => PostConst::STATUS_FAILED]);
+        }
+    }
+
+    private function safeError(string $error): string
+    {
+        $error = trim($error);
+        if ($error === '') {
+            $error = 'Lỗi không xác định';
+        }
+
+        $error = preg_replace('/\s+/', ' ', $error) ?? $error;
+        $error = preg_replace('/(access_token=)[^&\s]+/i', '$1[redacted]', $error) ?? $error;
+        $error = preg_replace('/(Authorization:\s*Bearer\s+)[^\s]+/i', '$1[redacted]', $error) ?? $error;
+        $error = preg_replace('/(cookieBlob|cookie|token)(["\']?\s*[:=]\s*["\']?)[^"\',\s}]+/i', '$1$2[redacted]', $error) ?? $error;
+
+        return mb_substr($error, 0, 240);
     }
 
     /**
@@ -99,7 +152,8 @@ class QueueService extends AppServiceFactory
         foreach ($stalePosts as $post) {
             /** @var PostModel $post */
             $postMapper->updateAttrsPost($post, ['status' => PostConst::STATUS_EXPIRED]);
-            $this->getContainerEntry(ActivityLogMapper::class)->log(
+            $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+            $activityLogMapper->log(
                 $post->getCreatedById(),
                 'post:' . $post->getId(),
                 'Quá hạn lịch',

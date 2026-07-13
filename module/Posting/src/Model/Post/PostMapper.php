@@ -11,6 +11,7 @@ use Facebook\Model\Fanpage\FanpageMapper;
 use Infra\Model\BrowserProfile\BrowserProfileMapper;
 use Laminas\Db\Sql\Expression;
 use Laminas\Db\Sql\Select;
+use Posting\Model\Log\ExecutionLogMapper;
 
 /**
  * Mapper bảng posts.
@@ -168,9 +169,12 @@ class PostMapper extends AppMapper
                 $postIds[] = $p->getId();
             }
         }
+        $postIds = array_values(array_unique($postIds));
 
         // Media theo postId
         $mediaMap = [];
+        $failureMap = [];
+        $timelineMap = [];
         if (! empty($postIds)) {
             $mediaModel = new PostMediaModel();
             $mediaModel->setPostIds($postIds);
@@ -181,6 +185,12 @@ class PostMapper extends AppMapper
                     fn(PostMediaModel $m) => $m->getRespPostMedia(),
                     $mediaList
                 );
+            }
+
+            $logMapper = $this->getContainerEntry(ExecutionLogMapper::class);
+            $failureMap = $logMapper->getLatestFailureMapByPostIds($postIds);
+            if (count($postIds) === 1) {
+                $timelineMap[$postIds[0]] = $logMapper->getTimeline((int)$postIds[0]);
             }
         }
 
@@ -204,19 +214,29 @@ class PostMapper extends AppMapper
         $profileInfoMap = [];
 
         if ($fanpageIds) {
-            $fanpageNameMap = $this->getContainerEntry(FanpageMapper::class)->getNameMapByIds($fanpageIds);
+            $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+            $fanpageNameMap = $fanpageMapper->getNameMapByIds($fanpageIds);
         }
         if ($accountIds) {
-            $accountInfoMap = $this->getContainerEntry(FacebookAccountMapper::class)->getInfoMapByIds($accountIds);
+            $accountMapper = $this->getContainerEntry(FacebookAccountMapper::class);
+            $accountInfoMap = $accountMapper->getInfoMapByIds($accountIds);
         }
         if ($profileIds) {
-            $profileInfoMap = $this->getContainerEntry(BrowserProfileMapper::class)->getInfoMapByIds($profileIds);
+            $profileMapper = $this->getContainerEntry(BrowserProfileMapper::class);
+            $profileInfoMap = $profileMapper->getInfoMapByIds($profileIds);
         }
 
         foreach ($items as $row) {
             /** @var PostModel $row */
             if (isset($mediaMap[$row->getId()])) {
                 $row->addOption('media', $mediaMap[$row->getId()]);
+            }
+            if (isset($failureMap[$row->getId()])) {
+                $row->setLastError($failureMap[$row->getId()]['message'] ?? null);
+                $row->setLastErrorAt($failureMap[$row->getId()]['loggedAt'] ?? null);
+            }
+            if (isset($timelineMap[$row->getId()])) {
+                $row->addOption('timeline', $timelineMap[$row->getId()]);
             }
             if ($row->getFanpageId() && isset($fanpageNameMap[$row->getFanpageId()])) {
                 $row->setFanpageName($fanpageNameMap[$row->getFanpageId()]);
@@ -327,8 +347,8 @@ class PostMapper extends AppMapper
         if ($mediaList !== null) {
             $mediaModel = new PostMediaModel();
             $mediaModel->setPostId($item->getId());
-            $this->getContainerEntry(PostMediaMapper::class)
-                ->replaceMediaForPost($mediaModel, $mediaList);
+            $mediaMapper = $this->getContainerEntry(PostMediaMapper::class);
+            $mediaMapper->replaceMediaForPost($mediaModel, $mediaList);
         }
 
         return $item;

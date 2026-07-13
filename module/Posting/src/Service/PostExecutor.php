@@ -100,18 +100,22 @@ class PostExecutor extends AppServiceFactory
         if ((int)$post->getTargetType() === PostConst::TARGET_PROFILE) {
             $account = new FacebookAccountModel();
             $account->setId((int)$post->getFacebookAccountId());
-            if (! $this->getContainerEntry(FacebookAccountMapper::class)->getFacebookAccount($account)) {
+            $accountMapper = $this->getContainerEntry(FacebookAccountMapper::class);
+            if (! $accountMapper->getFacebookAccount($account)) {
                 return ['canPost' => false, 'reason' => 'Không tìm thấy tài khoản'];
             }
-            return $this->getContainerEntry(FacebookAccountService::class)->computeCanPost($account);
+            $accountService = $this->getContainerEntry(FacebookAccountService::class);
+            return $accountService->computeCanPost($account);
         }
 
         $fanpage = new FanpageModel();
         $fanpage->setId((int)$post->getFanpageId());
-        if (! $this->getContainerEntry(FanpageMapper::class)->getFanpage($fanpage)) {
+        $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+        if (! $fanpageMapper->getFanpage($fanpage)) {
             return ['canPost' => false, 'reason' => 'Không tìm thấy fanpage'];
         }
-        return $this->getContainerEntry(FanpageService::class)->computeCanPost($fanpage);
+        $fanpageService = $this->getContainerEntry(FanpageService::class);
+        return $fanpageService->computeCanPost($fanpage);
     }
 
     /** Đăng theo channel. Graph API → GraphPublisher (fanpage); browser → agent Chrome. */
@@ -121,7 +125,8 @@ class PostExecutor extends AppServiceFactory
 
         if ((int)$post->getChannel() === PostConst::CHANNEL_GRAPH_API) {
             // Chỉ fanpage có apiEnabled đi kênh này (trang cá nhân luôn browser — resolveChannel).
-            return $this->getContainerEntry(GraphPublisher::class)->publish($post, $media);
+            $graphPublisher = $this->getContainerEntry(GraphPublisher::class);
+            return $graphPublisher->publish($post, $media);
         }
 
         $context = array_merge([
@@ -130,7 +135,8 @@ class PostExecutor extends AppServiceFactory
             'idemKey' => $this->idempotencyKey($post),
         ], $this->buildBrowserContext($post));
 
-        return $this->getContainerEntry(BrowserAgentClient::class)->publish($post, $context);
+        $browserAgentClient = $this->getContainerEntry(BrowserAgentClient::class);
+        return $browserAgentClient->publish($post, $context);
     }
 
     /** Media của bài (bảng post_media) — dùng cho cả 2 kênh. */
@@ -138,7 +144,8 @@ class PostExecutor extends AppServiceFactory
     {
         $mediaModel = new PostMediaModel();
         $mediaModel->setPostId($postId);
-        $rows = $this->getContainerEntry(PostMediaMapper::class)->getByPostId($mediaModel);
+        $mediaMapper = $this->getContainerEntry(PostMediaMapper::class);
+        $rows = $mediaMapper->getByPostId($mediaModel);
 
         $media = [];
         foreach ($rows as $m) {
@@ -161,7 +168,8 @@ class PostExecutor extends AppServiceFactory
         if ((int)$post->getTargetType() === PostConst::TARGET_FANPAGE) {
             $fanpage = new FanpageModel();
             $fanpage->setId((int)$post->getFanpageId());
-            if ($this->getContainerEntry(FanpageMapper::class)->getFanpage($fanpage)) {
+            $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+            if ($fanpageMapper->getFanpage($fanpage)) {
                 $accountId = (int)$fanpage->getFacebookAccountId();
                 $fbPageId  = $fanpage->getFbPageId();
             }
@@ -169,7 +177,11 @@ class PostExecutor extends AppServiceFactory
 
         $account = new FacebookAccountModel();
         $account->setId($accountId);
-        if (! $accountId || ! $this->getContainerEntry(FacebookAccountMapper::class)->getFacebookAccount($account)) {
+        if (! $accountId) {
+            return ['account' => [], 'cookie' => null, 'proxy' => null, 'fbPageId' => $fbPageId];
+        }
+        $accountMapper = $this->getContainerEntry(FacebookAccountMapper::class);
+        if (! $accountMapper->getFacebookAccount($account)) {
             return ['account' => [], 'cookie' => null, 'proxy' => null, 'fbPageId' => $fbPageId];
         }
 
@@ -195,7 +207,8 @@ class PostExecutor extends AppServiceFactory
         if ($account->getBrowserProfileId()) {
             $profile = new BrowserProfileModel();
             $profile->setId((int)$account->getBrowserProfileId());
-            if ($this->getContainerEntry(BrowserProfileMapper::class)->getBrowserProfile($profile)) {
+            $browserProfileMapper = $this->getContainerEntry(BrowserProfileMapper::class);
+            if ($browserProfileMapper->getBrowserProfile($profile)) {
                 $profileData = [
                     'id'            => $profile->getId(),
                     'profileId'     => $profile->getProfileId(),
@@ -205,7 +218,8 @@ class PostExecutor extends AppServiceFactory
                     'userAgent'     => $profile->getUserAgent(),
                 ];
                 if ($profile->getProxyId()) {
-                    $proxy = $this->getContainerEntry(ProxyMapper::class)->getById((int)$profile->getProxyId());
+                    $proxyMapper = $this->getContainerEntry(ProxyMapper::class);
+                    $proxy = $proxyMapper->getById((int)$profile->getProxyId());
                     if ($proxy) {
                         $proxyData = ['ip' => $proxy->getIp(), 'type' => $proxy->getType(), 'country' => $proxy->getCountry()];
                     }
@@ -235,9 +249,11 @@ class PostExecutor extends AppServiceFactory
             'fbPostId'    => $fbPostId,
             'publishedAt' => DateModel::getCurrentDateTime(),
         ]);
-        $this->getContainerEntry(JobMapper::class)->markDone((int)$job->getId());
+        $jobMapper = $this->getContainerEntry(JobMapper::class);
+        $jobMapper->markDone((int)$job->getId());
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $post->getCreatedById(),
             'post:' . $post->getId(),
             'Đăng bài',
@@ -255,14 +271,17 @@ class PostExecutor extends AppServiceFactory
      */
     private function handleFailure(PostModel $post, JobModel $job, string $errorType, string $error): void
     {
+        $error = $this->safeError($error);
         $postMapper = $this->getContainerEntry(PostMapper::class);
         $jobMapper  = $this->getContainerEntry(JobMapper::class);
         $jobId      = (int)$job->getId();
 
-        $this->getContainerEntry(ExecutionLogMapper::class)->log((int)$post->getId(), 'Lỗi: ' . $error, ExecutionLogMapper::STATUS_FAILED);
+        $logMapper = $this->getContainerEntry(ExecutionLogMapper::class);
+        $logMapper->log((int)$post->getId(), 'Lỗi: ' . $error, ExecutionLogMapper::STATUS_FAILED);
 
         if ($errorType === BrowserAgentClient::ERROR_CHECKPOINT && (int)$post->getTargetType() === PostConst::TARGET_PROFILE) {
-            $this->getContainerEntry(FacebookAccountService::class)->markCheckpoint((int)$post->getFacebookAccountId(), $error);
+            $accountService = $this->getContainerEntry(FacebookAccountService::class);
+            $accountService->markCheckpoint((int)$post->getFacebookAccountId(), $error);
             $postMapper->updateAttrsPost($post, ['status' => PostConst::STATUS_FAILED]);
             $jobMapper->markFailed($jobId, $error);
             $this->logActivityError($post, $error);
@@ -299,9 +318,25 @@ class PostExecutor extends AppServiceFactory
         $this->logActivityError($post, $error);
     }
 
+    private function safeError(string $error): string
+    {
+        $error = trim($error);
+        if ($error === '') {
+            $error = 'Lỗi không xác định';
+        }
+
+        $error = preg_replace('/\s+/', ' ', $error) ?? $error;
+        $error = preg_replace('/(access_token=)[^&\s]+/i', '$1[redacted]', $error) ?? $error;
+        $error = preg_replace('/(Authorization:\s*Bearer\s+)[^\s]+/i', '$1[redacted]', $error) ?? $error;
+        $error = preg_replace('/(cookieBlob|cookie|token)(["\']?\s*[:=]\s*["\']?)[^"\',\s}]+/i', '$1$2[redacted]', $error) ?? $error;
+
+        return mb_substr($error, 0, 240);
+    }
+
     private function logActivityError(PostModel $post, string $error): void
     {
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $post->getCreatedById(),
             'post:' . $post->getId(),
             'Đăng bài lỗi',

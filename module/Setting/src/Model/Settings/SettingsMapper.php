@@ -38,7 +38,8 @@ class SettingsMapper extends AppMapper
         if (! $model->getDefaultFanpageId()) {
             return;
         }
-        $nameMap = $this->getContainerEntry(FanpageMapper::class)->getNameMapByIds([$model->getDefaultFanpageId()]);
+        $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+        $nameMap = $fanpageMapper->getNameMapByIds([$model->getDefaultFanpageId()]);
         $model->setDefaultFanpageName($nameMap[$model->getDefaultFanpageId()] ?? null);
     }
 

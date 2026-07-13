@@ -98,7 +98,11 @@ class CookieMapper extends AppMapper
             }
             $accountIds[] = $ck->getFacebookAccountId();
         }
-        $profileInfoMap = $profileIds ? $this->getContainerEntry(BrowserProfileMapper::class)->getInfoMapByIds($profileIds) : [];
+        $profileInfoMap = [];
+        if ($profileIds) {
+            $browserProfileMapper = $this->getContainerEntry(BrowserProfileMapper::class);
+            $profileInfoMap = $browserProfileMapper->getInfoMapByIds($profileIds);
+        }
         $fanpageNamesMap = $this->getFanpageNamesByAccountIds($accountIds);
 
         foreach ($items as $ck) {

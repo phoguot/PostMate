@@ -68,7 +68,7 @@ class GraphPublisher extends AppServiceFactory
         $res = $client->delete($fbPostId, ['access_token' => $loaded['token']]);
         if (! empty($res['error'])) {
             $err = is_array($res['error']) ? $res['error'] : ['message' => (string)$res['error']];
-            return $this->fail((string)($err['message'] ?? 'Không hủy được lịch Facebook'), $this->classifyGraphError($err));
+            return $this->fail($this->graphErrorMessage($err, 'Không hủy được lịch Facebook'), $this->classifyGraphError($err));
         }
 
         return ['success' => true, 'fbPostId' => null, 'error' => null, 'errorType' => null];
@@ -128,7 +128,8 @@ class GraphPublisher extends AppServiceFactory
     {
         $fanpage = new FanpageModel();
         $fanpage->setId((int)$post->getFanpageId());
-        if (! $this->getContainerEntry(FanpageMapper::class)->getFanpage($fanpage)) {
+        $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+        if (! $fanpageMapper->getFanpage($fanpage)) {
             return ['success' => false, 'error' => 'Không tìm thấy fanpage', 'errorType' => BrowserAgentClient::ERROR_PERMANENT];
         }
 
@@ -146,7 +147,7 @@ class GraphPublisher extends AppServiceFactory
     {
         if (! empty($res['error'])) {
             $err  = is_array($res['error']) ? $res['error'] : ['message' => (string)$res['error']];
-            $msg  = ($prefix !== '' ? $prefix . ': ' : '') . (string)($err['message'] ?? 'Lỗi Graph API');
+            $msg  = ($prefix !== '' ? $prefix . ': ' : '') . $this->graphErrorMessage($err, 'Lỗi Graph API');
             return $this->fail($msg, $this->classifyGraphError($err));
         }
 
@@ -157,6 +158,22 @@ class GraphPublisher extends AppServiceFactory
         }
 
         return ['success' => true, 'fbPostId' => $fbPostId, 'error' => null, 'errorType' => null];
+    }
+
+    private function graphErrorMessage(array $error, string $fallback): string
+    {
+        $message = (string)($error['message'] ?? $fallback);
+        $details = [];
+        if (isset($error['code']) && $error['code'] !== '') {
+            $details[] = 'Graph code ' . (int)$error['code'];
+        }
+        if (isset($error['error_subcode']) && $error['error_subcode'] !== '') {
+            $details[] = 'subcode ' . (int)$error['error_subcode'];
+        }
+        if ($details) {
+            $message .= ' (' . implode(', ', $details) . ')';
+        }
+        return $message;
     }
 
     /**

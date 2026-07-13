@@ -165,7 +165,8 @@ class CookieService extends AppServiceFactory
             $mapper->updateAttrs($model, ['status' => CookieConst::STATUS_INVALID]);
         }
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'cookie:' . $model->getId(),
             'Refresh cookie',
@@ -243,7 +244,8 @@ class CookieService extends AppServiceFactory
         $account   = new FacebookAccountModel();
         $account->setId($accountId);
         $account->setUserId($userId);
-        if (! $this->getContainerEntry(FacebookAccountMapper::class)->getFacebookAccount($account)) {
+        $accountMapper = $this->getContainerEntry(FacebookAccountMapper::class);
+        if (! $accountMapper->getFacebookAccount($account)) {
             return $apiResult->errorData404Response([AppMessage::NO_DATA]);
         }
 
@@ -264,7 +266,8 @@ class CookieService extends AppServiceFactory
         $mapper = $this->getContainerEntry(CookieMapper::class);
         $mapper->saveCookie($cookie);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'cookie:' . $cookie->getId(),
             'Đăng nhập',
@@ -310,7 +313,8 @@ class CookieService extends AppServiceFactory
             return $apiResult->errorData404Response([AppMessage::NO_DATA]);
         }
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'cookie:' . $model->getId(),
             'Xuất cookie',
@@ -350,7 +354,8 @@ class CookieService extends AppServiceFactory
 
         $mapper->deleteCookie($model);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'cookie:' . $model->getId(),
             'Xóa cookie',
@@ -369,7 +374,8 @@ class CookieService extends AppServiceFactory
     {
         $model = new CookieModel();
         $model->setId($cookieId);
-        if (! $this->getContainerEntry(CookieMapper::class)->getCookie($model)) {
+        $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+        if (! $cookieMapper->getCookie($model)) {
             return null;
         }
         // cookieBlob mã hóa at-rest; giải mã thật cần khóa từ secret manager (chưa tích hợp).

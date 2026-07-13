@@ -168,10 +168,12 @@ class UserService extends AppServiceFactory
             return $apiResult->errorInvalidFormResponse(['fullName' => AppMessage::INVALID_DATA]);
         }
 
-        $this->getContainerEntry(UserMapper::class)->updateAttrs($userId, $data);
+        $userMapper = $this->getContainerEntry(UserMapper::class);
+        $userMapper->updateAttrs($userId, $data);
         $this->currentUser = null;
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'user:' . $userId,
             'Cập nhật hồ sơ',
@@ -220,12 +222,14 @@ class UserService extends AppServiceFactory
             return $apiResult->errorInvalidFormResponse(['currentPassword' => 'Mật khẩu hiện tại không đúng']);
         }
 
-        $this->getContainerEntry(UserMapper::class)->updateAttrs($userId, [
+        $userMapper = $this->getContainerEntry(UserMapper::class);
+        $userMapper->updateAttrs($userId, [
             'passwordHash' => password_hash($newPassword, PASSWORD_BCRYPT),
         ]);
         $this->currentUser = null;
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'user:' . $userId,
             'Đổi mật khẩu',
@@ -252,7 +256,8 @@ class UserService extends AppServiceFactory
 
         $enabled = filter_var($payload['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'user:' . $userId,
             'Xác thực 2 lớp',

@@ -195,11 +195,13 @@ class DashboardService extends AppServiceFactory
 
         $profileModel = new BrowserProfileModel();
         $profileModel->setUserId($userId);
-        $browserStats = $this->getContainerEntry(BrowserProfileMapper::class)->getStats($profileModel);
+        $browserProfileMapper = $this->getContainerEntry(BrowserProfileMapper::class);
+        $browserStats = $browserProfileMapper->getStats($profileModel);
 
         $cookieModel = new CookieModel();
         $cookieModel->setUserId($userId);
-        $cookieStats = $this->getContainerEntry(CookieMapper::class)->getStats($cookieModel);
+        $cookieMapper = $this->getContainerEntry(CookieMapper::class);
+        $cookieStats = $cookieMapper->getStats($cookieModel);
 
         $failed = (int)($counts[PostConst::STATUS_FAILED] ?? 0);
         $overall = $failed > 0 || $cookieStats['invalid'] > 0 || $browserStats['offline'] > 0 ? 'warning' : 'good';

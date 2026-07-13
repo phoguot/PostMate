@@ -26,7 +26,8 @@ class CronService extends AppServiceFactory
         }
 
         $limit = ! empty($payload['limit']) ? (int)$payload['limit'] : $this->defaultLimit();
-        $result = $this->getContainerEntry(QueueService::class)->drainDueJobs($limit);
+        $queueService = $this->getContainerEntry(QueueService::class);
+        $result = $queueService->drainDueJobs($limit);
 
         return $apiResult->successResponse($result);
     }

@@ -41,6 +41,8 @@ class PostModel extends AppModel
     protected ?string $fanpageName = null;
     protected ?string $facebookAccountName = null;
     protected ?string $browserProfileName = null;
+    protected ?string $lastError = null;
+    protected ?string $lastErrorAt = null;
 
     // --- Search helpers (không lưu DB) ---
     protected ?int $userId = null; // user đăng nhập — dùng để scope theo chủ sở hữu
@@ -329,6 +331,28 @@ class PostModel extends AppModel
         return $this;
     }
 
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
+    }
+
+    public function setLastError(?string $lastError): self
+    {
+        $this->lastError = $lastError;
+        return $this;
+    }
+
+    public function getLastErrorAt(): ?string
+    {
+        return $this->lastErrorAt;
+    }
+
+    public function setLastErrorAt(?string $lastErrorAt): self
+    {
+        $this->lastErrorAt = $lastErrorAt;
+        return $this;
+    }
+
     // -------------------------------------------------------------------------
     /*
      * options fields (lưu compressed trong cột options)
@@ -476,6 +500,8 @@ class PostModel extends AppModel
             'media'              => $this->getOption('media') ?? [],
             'metrics'            => $this->getOption('metrics') ?? null,
             'timeline'           => $this->getOption('timeline') ?? [],
+            'lastError'          => AppFormat::castStringOrNull($this->lastError),
+            'lastErrorAt'        => $this->lastErrorAt,
             'user'               => $this->getUser() ?? [],
         ];
     }

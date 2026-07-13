@@ -55,4 +55,49 @@ class ExecutionLogMapper extends AppMapper
         }
         return $result;
     }
+
+    /** Lấy lỗi thất bại mới nhất theo từng post để FE hiển thị lý do đăng lỗi. */
+    public function getLatestFailureMapByPostIds(array $postIds): array
+    {
+        $postIds = array_values(array_unique(array_filter(array_map('intval', $postIds))));
+        if (empty($postIds)) {
+            return [];
+        }
+
+        $dbSql     = $this->getDbSql();
+        $dbAdapter = $this->getDbAdapter();
+
+        $select = $dbSql->select(['l' => ExecutionLogMapper::TABLE_NAME]);
+        $select->columns(['postId', 'step', 'loggedAt']);
+        $select->where(['l.status' => self::STATUS_FAILED]);
+        $select->where(['l.postId' => $postIds]);
+        $select->order(['l.id DESC']);
+
+        $rows = $dbAdapter->query($dbSql->buildSqlString($select), $dbAdapter::QUERY_MODE_EXECUTE);
+        $result = [];
+        foreach ($rows->toArray() as $row) {
+            $postId = (int)($row['postId'] ?? 0);
+            if ($postId <= 0 || isset($result[$postId])) {
+                continue;
+            }
+            $result[$postId] = [
+                'message'  => $this->normalizeFailureStep((string)($row['step'] ?? '')),
+                'loggedAt' => $row['loggedAt'] ?? null,
+            ];
+            if (count($result) === count($postIds)) {
+                break;
+            }
+        }
+        return $result;
+    }
+
+    private function normalizeFailureStep(string $step): string
+    {
+        $step = trim($step);
+        $prefix = 'Lỗi: ';
+        if (str_starts_with($step, $prefix)) {
+            return trim(substr($step, strlen($prefix)));
+        }
+        return $step;
+    }
 }

@@ -578,7 +578,8 @@ class PostService extends AppServiceFactory
     {
         $mediaModel = new PostMediaModel();
         $mediaModel->setPostId($postId);
-        $rows = $this->getContainerEntry(PostMediaMapper::class)->getByPostId($mediaModel);
+        $mediaMapper = $this->getContainerEntry(PostMediaMapper::class);
+        $rows = $mediaMapper->getByPostId($mediaModel);
 
         $media = [];
         foreach ($rows as $m) {
@@ -608,7 +609,8 @@ class PostService extends AppServiceFactory
         if ($targetId) {
             $fanpage = new FanpageModel();
             $fanpage->setId($targetId);
-            if ($this->getContainerEntry(FanpageMapper::class)->getFanpage($fanpage) && $fanpage->getApiEnabled()) {
+            $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+            if ($fanpageMapper->getFanpage($fanpage) && $fanpage->getApiEnabled()) {
                 return PostConst::CHANNEL_GRAPH_API;
             }
             return PostConst::CHANNEL_BROWSER;
@@ -626,19 +628,23 @@ class PostService extends AppServiceFactory
             $account = new FacebookAccountModel();
             $account->setId($targetId);
             $account->setUserId($userId);
-            if (! $this->getContainerEntry(FacebookAccountMapper::class)->getFacebookAccount($account)) {
+            $accountMapper = $this->getContainerEntry(FacebookAccountMapper::class);
+            if (! $accountMapper->getFacebookAccount($account)) {
                 return ['canPost' => false, 'reason' => AppMessage::NO_DATA];
             }
-            return $this->getContainerEntry(FacebookAccountService::class)->computeCanPost($account);
+            $accountService = $this->getContainerEntry(FacebookAccountService::class);
+            return $accountService->computeCanPost($account);
         }
 
         $fanpage = new FanpageModel();
         $fanpage->setId($targetId);
         $fanpage->setUserId($userId);
-        if (! $this->getContainerEntry(FanpageMapper::class)->getFanpage($fanpage)) {
+        $fanpageMapper = $this->getContainerEntry(FanpageMapper::class);
+        if (! $fanpageMapper->getFanpage($fanpage)) {
             return ['canPost' => false, 'reason' => AppMessage::NO_DATA];
         }
-        return $this->getContainerEntry(FanpageService::class)->computeCanPost($fanpage);
+        $fanpageService = $this->getContainerEntry(FanpageService::class);
+        return $fanpageService->computeCanPost($fanpage);
     }
 
     /** Đẩy job vào hàng đợi để worker đăng theo lịch. */
@@ -647,7 +653,8 @@ class PostService extends AppServiceFactory
         if (! $post->getId() || ! $runAt) {
             return;
         }
-        $this->getContainerEntry(QueueService::class)->enqueueJob((int)$post->getId(), $runAt);
+        $queueService = $this->getContainerEntry(QueueService::class);
+        $queueService->enqueueJob((int)$post->getId(), $runAt);
     }
 
     /**
@@ -664,10 +671,12 @@ class PostService extends AppServiceFactory
         ];
 
         if ($this->canUseNativeGraphSchedule($post, $scheduledAt)) {
-            $graphResult = $this->getContainerEntry(GraphPublisher::class)->schedule($post, $media, (string)$scheduledAt);
+            $graphPublisher = $this->getContainerEntry(GraphPublisher::class);
+            $graphResult = $graphPublisher->schedule($post, $media, (string)$scheduledAt);
             if (! empty($graphResult['success']) && ! empty($graphResult['fbPostId'])) {
                 $fbPostId = (string)$graphResult['fbPostId'];
-                $this->getContainerEntry(PostMapper::class)->updateAttrsPost($post, ['fbPostId' => $fbPostId]);
+                $postMapper = $this->getContainerEntry(PostMapper::class);
+                $postMapper->updateAttrsPost($post, ['fbPostId' => $fbPostId]);
                 $post->setFbPostId($fbPostId);
                 $this->enqueueJob($post, $scheduledAt);
                 return [
@@ -710,9 +719,11 @@ class PostService extends AppServiceFactory
 
     private function cancelNativeGraphSchedule(PostModel $post): array
     {
-        $result = $this->getContainerEntry(GraphPublisher::class)->delete($post);
+        $graphPublisher = $this->getContainerEntry(GraphPublisher::class);
+        $result = $graphPublisher->delete($post);
         if (! empty($result['success'])) {
-            $this->getContainerEntry(PostMapper::class)->updateAttrsPost($post, ['fbPostId' => null]);
+            $postMapper = $this->getContainerEntry(PostMapper::class);
+            $postMapper->updateAttrsPost($post, ['fbPostId' => null]);
             $post->setFbPostId(null);
         }
         return $result;
@@ -724,6 +735,7 @@ class PostService extends AppServiceFactory
         if (! $post->getId()) {
             return;
         }
-        $this->getContainerEntry(QueueService::class)->cancelJob((int)$post->getId());
+        $queueService = $this->getContainerEntry(QueueService::class);
+        $queueService->cancelJob((int)$post->getId());
     }
 }

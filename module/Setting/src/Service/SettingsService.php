@@ -87,7 +87,8 @@ class SettingsService extends AppServiceFactory
 
         $mapper->updateSettings($userId, $data);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'settings:' . $userId,
             'Cập nhật cài đặt',
@@ -164,7 +165,8 @@ class SettingsService extends AppServiceFactory
 
         $mapper->updateSettings($userId, ['lastBackupAt' => DateModel::getCurrentDateTime()]);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'settings:' . $userId,
             'Sao lưu',
@@ -198,7 +200,8 @@ class SettingsService extends AppServiceFactory
         // Hook: đóng gói cấu hình + dữ liệu ra file (json/zip) và lưu vào storage export.
         $export = $this->performExport($userId, $settings);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'settings:' . $userId,
             'Xuất dữ liệu',
@@ -221,7 +224,8 @@ class SettingsService extends AppServiceFactory
         $mapper = $this->getContainerEntry(SettingsMapper::class);
         $mapper->resetToDefaults($userId);
 
-        $this->getContainerEntry(ActivityLogMapper::class)->log(
+        $activityLogMapper = $this->getContainerEntry(ActivityLogMapper::class);
+        $activityLogMapper->log(
             $userId,
             'settings:' . $userId,
             'Đặt lại cài đặt',
